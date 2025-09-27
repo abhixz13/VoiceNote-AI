@@ -2,7 +2,7 @@
 export default {
   content: [
     "./index.html",
-    "./src/react-app/**/*.{js,ts,jsx,tsx}",
+    "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {},
