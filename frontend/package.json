@@ -7,7 +7,9 @@
     "lucide-react": "^0.510.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
-    "react-router": "^7.5.3"
+    "react-router": "^7.5.3",
+    "uuid": "^13.0.0",
+    "zod": "^4.1.11"
   },
   "devDependencies": {
     "@types/react": "19.0.10",
