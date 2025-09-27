@@ -5,6 +5,7 @@ import { useAudioRecording } from '@/hooks/useAudioRecording';
 import WaveformDisplay from '@/components/WaveformDisplay';
 import RecordingControls from '@/components/RecordingControls';
 import RecordingTimer from '@/components/RecordingTimer';
+import RecordingQuality from '@/components/RecordingQuality';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function Record() {
@@ -91,7 +92,17 @@ export default function Record() {
 
         {/* Main Recording Interface */}
         <div className="max-w-4xl mx-auto">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 sm:p-8 mb-6">
+            {/* Recording Quality Display */}
+            <div className="mb-6">
+              <RecordingQuality
+                sampleRate={recordingState.audioQuality.sampleRate}
+                bitRate={recordingState.audioQuality.bitRate}
+                channels={recordingState.audioQuality.channels}
+                isRecording={recordingState.isRecording}
+              />
+            </div>
+
             {/* Recording Timer */}
             <div className="text-center mb-8">
               <RecordingTimer
@@ -113,16 +124,18 @@ export default function Record() {
 
             {/* Recording Controls */}
             <div className="flex justify-center mb-8">
-              <RecordingControls
-                isRecording={recordingState.isRecording}
-                isPaused={recordingState.isPaused}
-                hasRecording={!!recordingState.audioBlob}
-                onStart={recordingControls.startRecording}
-                onPause={recordingControls.pauseRecording}
-                onResume={recordingControls.resumeRecording}
-                onStop={recordingControls.stopRecording}
-                onClear={recordingControls.clearRecording}
-              />
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <RecordingControls
+                  isRecording={recordingState.isRecording}
+                  isPaused={recordingState.isPaused}
+                  hasRecording={!!recordingState.audioBlob}
+                  onStart={recordingControls.startRecording}
+                  onPause={recordingControls.pauseRecording}
+                  onResume={recordingControls.resumeRecording}
+                  onStop={recordingControls.stopRecording}
+                  onClear={recordingControls.clearRecording}
+                />
+              </div>
             </div>
 
             {/* Error Display */}
@@ -218,7 +231,7 @@ export default function Record() {
 
             {/* Action Buttons */}
             {recordingState.audioBlob && (
-              <div className="flex gap-4 mt-8">
+              <div className="flex flex-col sm:flex-row gap-4 mt-8">
                 <button
                   onClick={handleSave}
                   disabled={!canSave}

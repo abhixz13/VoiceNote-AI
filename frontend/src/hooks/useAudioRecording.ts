@@ -8,6 +8,11 @@ export interface AudioRecordingState {
   audioUrl: string | null;
   amplitudeData: number[];
   error: string | null;
+  audioQuality: {
+    sampleRate: number;
+    bitRate: string;
+    channels: number;
+  };
 }
 
 export interface AudioRecordingControls {
@@ -26,6 +31,11 @@ export const useAudioRecording = (): [AudioRecordingState, AudioRecordingControl
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [amplitudeData, setAmplitudeData] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [audioQuality, setAudioQuality] = useState({
+    sampleRate: 44100,
+    bitRate: '128 kbps',
+    channels: 1,
+  });
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -48,8 +58,8 @@ export const useAudioRecording = (): [AudioRecordingState, AudioRecordingControl
 
     setAmplitudeData(prev => {
       const newData = [...prev, normalizedAmplitude];
-      // Keep only last 100 amplitude readings for performance
-      return newData.slice(-100);
+      // Keep only last 50 amplitude readings for performance (as per Phase 1 requirements)
+      return newData.slice(-50);
     });
   }, []);
 
@@ -66,8 +76,8 @@ export const useAudioRecording = (): [AudioRecordingState, AudioRecordingControl
 
   const startDurationTimer = useCallback(() => {
     durationTimerRef.current = setInterval(() => {
-      setDuration(prev => prev + 0.1);
-    }, 100);
+      setDuration(prev => prev + 1);
+    }, 1000); // Update every second for accurate duration tracking
   }, []);
 
   const stopDurationTimer = useCallback(() => {
@@ -98,6 +108,17 @@ export const useAudioRecording = (): [AudioRecordingState, AudioRecordingControl
       const source = audioContextRef.current.createMediaStreamSource(stream);
       source.connect(analyserRef.current);
       analyserRef.current.fftSize = 256;
+
+      // Detect audio quality from the stream
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length > 0) {
+        const settings = audioTracks[0].getSettings();
+        setAudioQuality({
+          sampleRate: settings.sampleRate || 44100,
+          bitRate: '128 kbps', // WebM Opus default
+          channels: settings.channelCount || 1,
+        });
+      }
 
       // Setup media recorder
       mediaRecorderRef.current = new MediaRecorder(stream, {
@@ -219,6 +240,7 @@ export const useAudioRecording = (): [AudioRecordingState, AudioRecordingControl
       audioUrl,
       amplitudeData,
       error,
+      audioQuality,
     },
     {
       startRecording,
