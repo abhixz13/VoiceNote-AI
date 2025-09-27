@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { Play, Trash2, Clock, FileAudio, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { Play, Trash2, Clock, FileAudio, ChevronLeft, ChevronRight, Plus, Download } from 'lucide-react';
 import { RecordingType, RecordingsListType } from '../types';
+import { supabase, STORAGE_BUCKET } from '../lib/supabaseClient';
 
 export default function Recordings() {
   const navigate = useNavigate();
@@ -42,19 +43,32 @@ export default function Recordings() {
     fetchRecordings(currentPage);
   }, [currentPage]);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (recording: RecordingType) => {
     if (!confirm('Are you sure you want to delete this recording?')) {
       return;
     }
 
-    setDeleting(id);
+    setDeleting(recording.id);
     try {
-      const response = await fetch(`/api/recordings/${id}`, {
+      // Delete from database first
+      const response = await fetch(`/api/recordings/${recording.id}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete recording');
+        throw new Error('Failed to delete recording from database');
+      }
+
+      // Delete audio file from Supabase Storage if file_path exists
+      if (recording.file_path) {
+        const { error: storageError } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .remove([recording.file_path]);
+
+        if (storageError) {
+          console.warn('Failed to delete audio file from storage:', storageError);
+          // Don't throw error here as the database record is already deleted
+        }
       }
 
       // Refresh the current page
@@ -81,6 +95,43 @@ export default function Recordings() {
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const handleDownload = async (recording: RecordingType) => {
+    if (!recording.file_path) {
+      alert('No audio file available for download');
+      return;
+    }
+
+    try {
+      // Get signed URL for download
+      const { data, error } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .createSignedUrl(recording.file_path, 60); // 60 seconds expiry
+
+      if (error) {
+        throw new Error(`Failed to get download URL: ${error.message}`);
+      }
+
+      // Download the file
+      const response = await fetch(data.signedUrl);
+      if (!response.ok) {
+        throw new Error('Failed to download audio file');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${recording.title}.webm`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading audio:', error);
+      alert(`Error downloading audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -227,8 +278,18 @@ export default function Recordings() {
                             View
                           </button>
                           
+                          {recording.file_path && (
+                            <button
+                              onClick={() => handleDownload(recording)}
+                              className="inline-flex items-center gap-1 bg-green-100 hover:bg-green-200 text-green-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors dark:bg-green-900 dark:hover:bg-green-800 dark:text-green-300"
+                            >
+                              <Download className="w-4 h-4" />
+                              Download
+                            </button>
+                          )}
+                          
                           <button
-                            onClick={() => handleDelete(recording.id)}
+                            onClick={() => handleDelete(recording)}
                             disabled={deleting === recording.id}
                             className="inline-flex items-center gap-1 bg-red-100 hover:bg-red-200 text-red-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:bg-red-900 dark:hover:bg-red-800 dark:text-red-300"
                           >

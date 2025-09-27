@@ -7,6 +7,7 @@ import RecordingControls from '@/components/RecordingControls';
 import RecordingTimer from '@/components/RecordingTimer';
 import RecordingQuality from '@/components/RecordingQuality';
 import { v4 as uuidv4 } from 'uuid';
+import { supabase, STORAGE_BUCKET, TEMP_USER_ID } from '@/lib/supabaseClient';
 
 export default function Record() {
   const navigate = useNavigate();
@@ -24,16 +25,35 @@ export default function Record() {
     setSaving(true);
     try {
       const recordingTitle = title.trim() || `Recording ${new Date().toLocaleString()}`;
+      const recordingId = uuidv4();
       
       // Create recording metadata
       const metadata = {
         notes: notes.trim(),
         gain,
         noiseReduction,
-        recordingId: uuidv4(),
+        recordingId,
       };
 
-      // Call API to create recording
+      // Upload audio file to Supabase Storage first
+      const filePath = `${TEMP_USER_ID}/${recordingId}.webm`;
+      const { error: uploadError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(filePath, recordingState.audioBlob, {
+          contentType: 'audio/webm',
+          upsert: false
+        });
+
+      if (uploadError) {
+        throw new Error(`Failed to upload audio: ${uploadError.message}`);
+      }
+
+      // Get the public URL for the uploaded file
+      const { data: urlData } = supabase.storage
+        .from(STORAGE_BUCKET)
+        .getPublicUrl(filePath);
+
+      // Call API to create recording with file path
       const response = await fetch('/api/recordings', {
         method: 'POST',
         headers: {
@@ -43,18 +63,20 @@ export default function Record() {
           title: recordingTitle,
           duration_seconds: recordingState.duration,
           file_size_bytes: recordingState.audioBlob.size,
+          file_path: filePath,
+          file_url: urlData.publicUrl,
           metadata: JSON.stringify(metadata),
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save recording');
+        // If database save fails, try to clean up the uploaded file
+        await supabase.storage.from(STORAGE_BUCKET).remove([filePath]);
+        throw new Error('Failed to save recording to database');
       }
 
       const recording = await response.json();
-      
-      // TODO: Implement file upload to cloud storage
-      console.log('Recording saved:', recording);
+      console.log('Recording saved successfully:', recording);
       
       // Reset form and navigate to recordings list
       recordingControls.clearRecording();
@@ -64,7 +86,7 @@ export default function Record() {
       
     } catch (error) {
       console.error('Error saving recording:', error);
-      // TODO: Show error toast
+      alert(`Error saving recording: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setSaving(false);
     }
