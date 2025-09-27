@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { ArrowLeft, Play, Download, RefreshCw, Clock, FileAudio, Loader2 } from 'lucide-react';
-import { RecordingType } from '../../../utils/types/types';
+import { RecordingType } from '../types';
 
 export default function RecordingDetail() {
   const { id } = useParams<{ id: string }>();

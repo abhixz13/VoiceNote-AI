@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Play, Trash2, Clock, FileAudio, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { RecordingType, RecordingsListType } from '../../../utils/types/types';
+import { RecordingType, RecordingsListType } from '../types';
 
 export default function Recordings() {
   const navigate = useNavigate();
