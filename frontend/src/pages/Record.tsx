@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Save, Upload, Settings, Volume2 } from 'lucide-react';
-import { useAudioRecording } from '@/react-app/hooks/useAudioRecording';
-import WaveformDisplay from '@/react-app/components/WaveformDisplay';
-import RecordingControls from '@/react-app/components/RecordingControls';
-import RecordingTimer from '@/react-app/components/RecordingTimer';
+import { useAudioRecording } from '@/hooks/useAudioRecording';
+import WaveformDisplay from '@/components/WaveformDisplay';
+import RecordingControls from '@/components/RecordingControls';
+import RecordingTimer from '@/components/RecordingTimer';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function Record() {

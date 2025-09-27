@@ -7,7 +7,8 @@ import {
   PaginationSchema,
   RecordingSchema,
   RecordingsListSchema
-} from "../shared/types";
+} from "../../utils/types/types";
+import { Env } from "./types";
 
 const app = new Hono<{ Bindings: Env }>();
 

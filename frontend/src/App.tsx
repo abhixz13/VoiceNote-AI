@@ -1,8 +1,8 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router";
-import HomePage from "@/react-app/pages/Home";
-import RecordPage from "@/react-app/pages/Record";
-import RecordingsPage from "@/react-app/pages/Recordings";
-import RecordingDetailPage from "@/react-app/pages/RecordingDetail";
+import HomePage from "@/pages/Home";
+import RecordPage from "@/pages/Record";
+import RecordingsPage from "@/pages/Recordings";
+import RecordingDetailPage from "@/pages/RecordingDetail";
 
 export default function App() {
   return (

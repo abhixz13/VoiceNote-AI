@@ -1,0 +1,26 @@
+{
+  "name": "voice-note-ai-backend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@hono/zod-validator": "^0.5.0",
+    "@types/uuid": "^11.0.0",
+    "hono": "4.7.7",
+    "uuid": "^13.0.0",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.12.0",
+    "@cloudflare/workers-types": "^4.20240925.0",
+    "@types/node": "22.14.1",
+    "typescript": "5.8.3",
+    "wrangler": "^4.33.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "cf-typegen": "wrangler types"
+  }
+}
