@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Save, Upload, Settings, Volume2 } from 'lucide-react';
+import { Save, Upload, Settings, Volume2, Download } from 'lucide-react';
 import { useAudioRecording } from '@/hooks/useAudioRecording';
 import WaveformDisplay from '@/components/WaveformDisplay';
 import RecordingControls from '@/components/RecordingControls';
@@ -73,6 +73,19 @@ export default function Record() {
   const handleUploadAndTranscribe = async () => {
     await handleSave();
     // TODO: Trigger transcription job
+  };
+
+  const handleDownload = () => {
+    if (recordingState.audioBlob) {
+      const url = URL.createObjectURL(recordingState.audioBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${title.trim() || 'recording'}.webm`; // Default to .webm for WebM format
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
   };
 
   const canSave = recordingState.audioBlob && !saving;
@@ -248,6 +261,15 @@ export default function Record() {
                 >
                   <Upload className="w-5 h-5" />
                   {saving ? 'Processing...' : 'Save & Transcribe'}
+                </button>
+
+                <button
+                  onClick={handleDownload}
+                  disabled={!canSave}
+                  className="flex-1 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                >
+                  <Download className="w-5 h-5" />
+                  Download Audio
                 </button>
               </div>
             )}
