@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Play, Trash2, Clock, FileAudio, ChevronLeft, ChevronRight, Plus, Download } from 'lucide-react';
-import { RecordingType, RecordingsListType } from '../types';
+import { RecordingType } from '../types';
 import { supabase, STORAGE_BUCKET } from '../lib/supabaseClient';
 
 export default function Recordings() {
@@ -21,17 +21,28 @@ export default function Recordings() {
     setError(null);
     
     try {
-      const response = await fetch(`/api/recordings?page=${page}&limit=${limit}`);
+      // Calculate offset for pagination
+      const offset = (page - 1) * limit;
       
-      if (!response.ok) {
-        throw new Error('Failed to fetch recordings');
+      // Fetch recordings directly from Supabase
+      const { data: recordingsData, error: recordingsError, count } = await supabase
+        .from('recordings')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (recordingsError) {
+        throw new Error(`Failed to fetch recordings: ${recordingsError.message}`);
       }
 
-      const data: RecordingsListType = await response.json();
-      setRecordings(data.recordings);
-      setCurrentPage(data.page);
-      setTotalPages(data.total_pages);
-      setTotal(data.total);
+      // Calculate pagination info
+      const total = count || 0;
+      const totalPages = Math.ceil(total / limit);
+      
+      setRecordings(recordingsData || []);
+      setCurrentPage(page);
+      setTotalPages(totalPages);
+      setTotal(total);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch recordings');
     } finally {
@@ -51,12 +62,13 @@ export default function Recordings() {
     setDeleting(recording.id);
     try {
       // Delete from database first
-      const response = await fetch(`/api/recordings/${recording.id}`, {
-        method: 'DELETE',
-      });
+      const { error: dbError } = await supabase
+        .from('recordings')
+        .delete()
+        .eq('id', recording.id);
 
-      if (!response.ok) {
-        throw new Error('Failed to delete recording from database');
+      if (dbError) {
+        throw new Error(`Failed to delete recording from database: ${dbError.message}`);
       }
 
       // Delete audio file from Supabase Storage if file_path exists
