@@ -54,30 +54,27 @@ export default function Record() {
         .from(STORAGE_BUCKET)
         .getPublicUrl(filePath);
 
-      // Call API to create recording with file path
-      const response = await fetch('/api/recordings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Save directly to Supabase database
+      const { error: dbError } = await supabase
+        .from('recordings')
+        .insert({
           title: recordingTitle,
           duration_seconds: recordingState.duration,
           file_size_bytes: recordingState.audioBlob.size,
           file_path: filePath,
           file_url: urlData.publicUrl,
           metadata: JSON.stringify(metadata),
-        }),
-      });
+          status: 'recorded',
+          user_id: TEMP_USER_ID,
+        });
 
-      if (!response.ok) {
+      if (dbError) {
         // If database save fails, try to clean up the uploaded file
         await supabase.storage.from(STORAGE_BUCKET).remove([filePath]);
-        throw new Error('Failed to save recording to database');
+        throw new Error(`Failed to save recording to database: ${dbError.message}`);
       }
 
-      const recording = await response.json();
-      console.log('Recording saved successfully:', recording);
+      console.log('Recording saved successfully to database');
       
       // Reset form and navigate to recordings list
       recordingControls.clearRecording();
