@@ -6,6 +6,7 @@ import WaveformDisplay from '@/components/WaveformDisplay';
 import RecordingControls from '@/components/RecordingControls';
 import RecordingTimer from '@/components/RecordingTimer';
 import RecordingQuality from '@/components/RecordingQuality';
+import AudioDiagnostics from '@/components/AudioDiagnostics';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, STORAGE_BUCKET, TEMP_USER_ID } from '@/lib/supabaseClient';
 
@@ -154,6 +155,14 @@ export default function Record() {
                 isRecording={recordingState.isRecording}
                 isPaused={recordingState.isPaused}
                 className="h-32"
+              />
+            </div>
+
+            {/* Audio Diagnostics */}
+            <div className="mb-8">
+              <AudioDiagnostics
+                isRecording={recordingState.isRecording}
+                analyserNode={recordingState.analyserNode}
               />
             </div>
 

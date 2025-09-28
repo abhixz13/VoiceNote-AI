@@ -13,6 +13,7 @@ export interface AudioRecordingState {
     bitRate: string;
     channels: number;
   };
+  analyserNode: AnalyserNode | null;
 }
 
 export interface AudioRecordingControls {
@@ -36,6 +37,7 @@ export const useAudioRecording = (): [AudioRecordingState, AudioRecordingControl
     bitRate: '128 kbps',
     channels: 1,
   });
+  const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -114,6 +116,7 @@ export const useAudioRecording = (): [AudioRecordingState, AudioRecordingControl
       const source = audioContextRef.current.createMediaStreamSource(stream);
       source.connect(analyserRef.current);
       analyserRef.current.fftSize = 256;
+      setAnalyserNode(analyserRef.current);
 
       // Detect audio quality from the stream
       const audioTracks = stream.getAudioTracks();
@@ -261,6 +264,7 @@ export const useAudioRecording = (): [AudioRecordingState, AudioRecordingControl
       amplitudeData,
       error,
       audioQuality,
+      analyserNode,
     },
     {
       startRecording,
