@@ -139,14 +139,18 @@ export const useAudioRecording = (): [AudioRecordingState, AudioRecordingControl
 
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data.size > 0) {
+          console.log('Audio chunk received:', event.data.size, 'bytes');
           chunksRef.current.push(event.data);
         }
       };
 
       mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const blob = new Blob(chunksRef.current, { type: mimeType || 'audio/webm' });
+        console.log('Audio blob created:', blob.size, 'bytes, type:', blob.type);
         setAudioBlob(blob);
-        setAudioUrl(URL.createObjectURL(blob));
+        const audioUrl = URL.createObjectURL(blob);
+        console.log('Audio URL created:', audioUrl);
+        setAudioUrl(audioUrl);
         
         // Clean up stream
         if (streamRef.current) {
