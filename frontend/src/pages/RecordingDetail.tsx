@@ -12,6 +12,9 @@ export default function RecordingDetail() {
   const [activeTab, setActiveTab] = useState<'short' | 'medium' | 'detailed'>('short');
   const [transcribing, setTranscribing] = useState(false);
 
+  // Define your Railway backend URL
+  const RAILWAY_BACKEND_URL = 'https://voicenote-ai-backend.up.railway.app';
+
   const fetchRecording = async () => {
     if (!id) return;
 
@@ -46,7 +49,7 @@ export default function RecordingDetail() {
 
     setTranscribing(true);
     try {
-      const response = await fetch(`/api/recordings/${recording.id}/transcribe`, {
+      const response = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${recording.id}/transcribe`, {
         method: 'POST',
       });
 
