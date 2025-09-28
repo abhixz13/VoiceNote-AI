@@ -52,9 +52,13 @@ export const useAudioRecording = (): [AudioRecordingState, AudioRecordingControl
     const dataArray = new Uint8Array(bufferLength);
     analyserRef.current.getByteFrequencyData(dataArray);
 
-    // Calculate average amplitude
-    const average = dataArray.reduce((acc, value) => acc + value, 0) / bufferLength;
-    const normalizedAmplitude = average / 255; // Normalize to 0-1
+    // Calculate RMS (Root Mean Square) for better audio level detection
+    const sumSquares = dataArray.reduce((acc, value) => acc + value * value, 0);
+    const rms = Math.sqrt(sumSquares / bufferLength);
+    const normalizedAmplitude = rms / 255; // Normalize to 0-1
+    
+    // Log audio levels for debugging
+    console.log('Audio level:', normalizedAmplitude.toFixed(3), 'RMS:', rms.toFixed(1));
 
     setAmplitudeData(prev => {
       const newData = [...prev, normalizedAmplitude];
@@ -91,12 +95,14 @@ export const useAudioRecording = (): [AudioRecordingState, AudioRecordingControl
     try {
       setError(null);
       
-      // Get user media
+      // Get user media with minimal processing to capture ALL sounds
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: false,    // Disable to capture background audio
+          noiseSuppression: false,   // Disable to capture all sounds
+          autoGainControl: false,    // Disable to preserve original audio levels
+          sampleRate: 44100,         // High quality sampling
+          channelCount: 1,           // Mono recording
         } 
       });
       
