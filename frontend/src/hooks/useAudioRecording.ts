@@ -120,10 +120,20 @@ export const useAudioRecording = (): [AudioRecordingState, AudioRecordingControl
         });
       }
 
-      // Setup media recorder
-      mediaRecorderRef.current = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
-      });
+      // Setup media recorder with better browser compatibility
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/mp4';
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = ''; // Use default
+          }
+        }
+      }
+      
+      console.log('Using MIME type:', mimeType || 'default');
+      mediaRecorderRef.current = new MediaRecorder(stream, mimeType ? { mimeType } : {});
 
       chunksRef.current = [];
 
