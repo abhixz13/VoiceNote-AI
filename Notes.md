@@ -21,3 +21,16 @@
 - **Continuous Integration (CI)**: Automated builds and tests run on every code push/PR to catch issues early.
 - **Continuous Deployment (CD)**: Automated deployment to environments (e.g., Vercel for frontend) upon merging into `main`.
 - **Dependency Locking**: `package-lock.json` ensures consistent dependency versions across all environments and development setups.
+
+---
+
+# AI/ML Backend Stack
+
+| Tool / Technology       | Role / Purpose                                                                                                                                                             |
+| :---------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FastAPI (Python)        | Core backend framework for AI services. Handles transcription and summarization API endpoints. Deployed on Railway.                                                       |
+| OpenAI Whisper         | Speech-to-text model for transcribing audio recordings. Converts .webm audio files to text.                                                                               |
+| OpenAI GPT-4           | Large language model for generating summaries. Creates executive summaries, key points, and detailed summaries from transcriptions.                                      |
+| Text Preprocessing Agent| Single function that handles cleaning, normalization, and semantic chunking of Whisper transcriptions. Prepares text for optimal summarization by GPT-4.                 |
+| Supabase (Python client)| Database and storage access. Stores recording metadata, file paths, transcriptions, and generated summaries. Uses service role key for backend operations.               |
+| Railway                | Hosting platform for Python backend services. Provides automatic deployments from Git and environment variable management.                                                |
