@@ -1,24 +1,30 @@
+#!/usr/bin/env python3
 """
-VoiceNote AI Backend - Python FastAPI Server
-Handles audio transcription and summarization using OpenAI APIs
+VoiceNote AI - Backend API Layer
+FastAPI application for audio transcription and summarization
 """
 
 import os
-import asyncio
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 from datetime import datetime
-
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+from transcription_service import TranscriptionService
 from ai_summary_service import AISummaryService
-from supabase_client import get_supabase_client
 
 # Load environment variables
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -30,146 +36,153 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this properly for production
+    allow_origins=["*"],  # Configure for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize AI service
-ai_service = AISummaryService()
+# Initialize services (once at startup, not per request)
+transcription_service = TranscriptionService()
+summary_service = AISummaryService()
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-# Pydantic models
+# Pydantic models for request/response
 class TranscriptionRequest(BaseModel):
-    recording_id: int
+    recording_id: str
 
 class TranscriptionResponse(BaseModel):
-    message: str
-    recording_id: int
     status: str
-    transcription_length: Optional[int] = None
-    summaries_generated: Optional[int] = None
-
-class HealthResponse(BaseModel):
-    status: str
+    recording_id: str
+    transcription_file_path: Optional[str] = None
+    error: Optional[str] = None
     timestamp: str
 
+class SummaryRequest(BaseModel):
+    recording_id: str
+
+class SummaryResponse(BaseModel):
+    status: str
+    recording_id: str
+    summaries: Optional[Dict] = None
+    error: Optional[str] = None
+    timestamp: str
+
+
 # Health check endpoint
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
+@app.get("/")
+async def root():
     """Health check endpoint"""
-    return HealthResponse(
-        status="healthy",
-        timestamp=datetime.now().isoformat()
-    )
+    return {
+        "status": "healthy",
+        "service": "VoiceNote AI Backend",
+        "version": "1.0.0",
+        "timestamp": datetime.now().isoformat()
+    }
+
 
 # Transcription endpoint
 @app.post("/api/recordings/{recording_id}/transcribe", response_model=TranscriptionResponse)
-async def transcribe_recording(recording_id: int):
+async def transcribe_recording(recording_id: str):
     """
-    Transcribe and summarize a recording
+    Transcribe an audio recording from Supabase storage
+    
+    Args:
+        recording_id: ID of the recording to transcribe
+        
+    Returns:
+        TranscriptionResponse with status and transcription file path
     """
     try:
         logger.info(f"Starting transcription for recording {recording_id}")
         
-        # Get Supabase client
-        supabase = get_supabase_client()
+        result = await transcription_service.transcribe_recording(recording_id)
         
-        # Fetch recording details from database
-        recording_response = supabase.table('recordings').select('*').eq('id', recording_id).execute()
+        if result['status'] == 'error':
+            raise HTTPException(status_code=500, detail=result['error'])
         
-        if not recording_response.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Recording not found"
-            )
-        
-        recording = recording_response.data[0]
-        
-        # Update status to processing
-        supabase.table('recordings').update({
-            'status': 'processing',
-            'updated_at': datetime.now().isoformat()
-        }).eq('id', recording_id).execute()
-        
-        # Download audio file from Supabase Storage
-        audio_path = recording.get('file_path')
-        if not audio_path:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No audio file path found for recording"
-            )
-        
-        # Download audio file
-        audio_response = supabase.storage.from_('recordings').download(audio_path)
-        
-        if audio_response[1]:  # Check for error
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to download audio file: {audio_response[1]}"
-            )
-        
-        audio_data = audio_response[0]
-        
-        # Save audio to temporary file for processing
-        temp_audio_path = f"temp_audio_{recording_id}_{datetime.now().timestamp()}.webm"
-        with open(temp_audio_path, 'wb') as f:
-            f.write(audio_data)
-        
-        try:
-            # Generate transcription and summaries using AISummaryService
-            result = await ai_service.generateRecordingSummaries(temp_audio_path)
-            
-            # Update database with results
-            update_data = {
-                'transcription': result['transcription'],
-                'summary_short': result['summaries']['short'],
-                'summary_medium': result['summaries']['medium'],
-                'summary_detailed': result['summaries']['detailed'],
-                'status': 'transcribed',
-                'updated_at': datetime.now().isoformat()
-            }
-            
-            supabase.table('recordings').update(update_data).eq('id', recording_id).execute()
-            
-            logger.info(f"Successfully processed recording {recording_id}")
-            
-            return TranscriptionResponse(
-                message="Transcription and summarization completed successfully",
-                recording_id=recording_id,
-                status="transcribed",
-                transcription_length=len(result['transcription']),
-                summaries_generated=len(result['summaries'])
-            )
-            
-        finally:
-            # Clean up temporary file
-            if os.path.exists(temp_audio_path):
-                os.remove(temp_audio_path)
-                
-    except HTTPException:
-        # Re-raise HTTP exceptions
-        raise
-    except Exception as e:
-        logger.error(f"Error processing recording {recording_id}: {str(e)}")
-        
-        # Update status to error
-        try:
-            supabase.table('recordings').update({
-                'status': 'error',
-                'updated_at': datetime.now().isoformat()
-            }).eq('id', recording_id).execute()
-        except:
-            pass  # Ignore errors when updating status
-        
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process recording: {str(e)}"
+        return TranscriptionResponse(
+            status=result['status'],
+            recording_id=result['recording_id'],
+            transcription_file_path=result.get('transcription_file_path'),
+            timestamp=result['timestamp']
         )
+        
+    except Exception as e:
+        logger.error(f"Error in transcription endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Summarization endpoint
+@app.post("/api/recordings/{recording_id}/summarize", response_model=SummaryResponse)
+async def summarize_recording(recording_id: str):
+    """
+    Generate summaries for a transcribed recording
+    
+    Args:
+        recording_id: ID of the recording to summarize
+        
+    Returns:
+        SummaryResponse with status and summaries
+    """
+    try:
+        logger.info(f"Starting summarization for recording {recording_id}")
+        
+        result = await summary_service.generate_summaries_for_recording(recording_id)
+        
+        if result['status'] == 'error':
+            raise HTTPException(status_code=500, detail=result['error'])
+        
+        return SummaryResponse(
+            status=result['status'],
+            recording_id=result['recording_id'],
+            summaries=result.get('summaries'),
+            timestamp=result['timestamp']
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in summarization endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Combined endpoint (transcribe + summarize)
+@app.post("/api/recordings/{recording_id}/process")
+async def process_recording(recording_id: str, background_tasks: BackgroundTasks):
+    """
+    Process recording: transcribe then summarize
+    
+    Args:
+        recording_id: ID of the recording to process
+        
+    Returns:
+        Status message
+    """
+    try:
+        logger.info(f"Starting full processing for recording {recording_id}")
+        
+        # Step 1: Transcribe
+        transcription_result = await transcription_service.transcribe_recording(recording_id)
+        if transcription_result['status'] == 'error':
+            raise HTTPException(status_code=500, detail=transcription_result['error'])
+        
+        # Step 2: Summarize
+        summary_result = await summary_service.generate_summaries_for_recording(recording_id)
+        if summary_result['status'] == 'error':
+            raise HTTPException(status_code=500, detail=summary_result['error'])
+        
+        return {
+            "status": "success",
+            "recording_id": recording_id,
+            "message": "Recording transcribed and summarized successfully",
+            "transcription_file_path": transcription_result.get('transcription_file_path'),
+            "summaries": summary_result.get('summaries'),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in process endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn

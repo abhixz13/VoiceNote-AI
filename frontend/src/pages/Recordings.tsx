@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { Play, Trash2, Clock, FileAudio, ChevronLeft, ChevronRight, Plus, Download } from 'lucide-react';
+import { Play, Trash2, Clock, FileAudio, ChevronLeft, ChevronRight, Plus, Download, Sparkles } from 'lucide-react';
 import { RecordingType } from '../types';
 import { supabase, STORAGE_BUCKET } from '../lib/supabaseClient';
 
@@ -13,8 +13,11 @@ export default function Recordings() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [summarizing, setSummarizing] = useState<number | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const limit = 10;
+  const RAILWAY_BACKEND_URL = 'https://voicenote-ai-backend.up.railway.app';
 
   const fetchRecordings = async (page: number) => {
     setLoading(true);
@@ -146,6 +149,35 @@ export default function Recordings() {
     }
   };
 
+  const handleSummarize = async (recording: RecordingType) => {
+    setSummarizing(recording.id);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${recording.id}/transcribe`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to start summarization' }));
+        throw new Error(errorData.detail || 'Failed to start summarization');
+      }
+
+      setSuccessMessage('Summarization started successfully!');
+      
+      // Refresh recordings to get updated status
+      await fetchRecordings(currentPage);
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start summarization');
+    } finally {
+      setSummarizing(null);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const baseClasses = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium";
     
@@ -222,6 +254,13 @@ export default function Recordings() {
           </div>
         )}
 
+        {/* Success Display */}
+        {successMessage && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-green-700">{successMessage}</p>
+          </div>
+        )}
+
         <div className="max-w-4xl mx-auto">
           {recordings.length === 0 ? (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-12 text-center">
@@ -288,6 +327,15 @@ export default function Recordings() {
                           >
                             <Play className="w-4 h-4" />
                             View
+                          </button>
+                          
+                          <button
+                            onClick={() => handleSummarize(recording)}
+                            disabled={summarizing === recording.id}
+                            className="inline-flex items-center gap-1 bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:bg-purple-900 dark:hover:bg-purple-800 dark:text-purple-300"
+                          >
+                            <Sparkles className="w-4 h-4" />
+                            {summarizing === recording.id ? 'Processing...' : 'Summarize'}
                           </button>
                           
                           {recording.file_path && (

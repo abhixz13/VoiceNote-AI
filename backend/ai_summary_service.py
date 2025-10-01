@@ -7,9 +7,12 @@ import openai
 import os
 import json
 import asyncio
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime
 import logging
+
+# Import the new chunk storage service
+from chunk_storage_service import ChunkStorageService, create_chunk_summary_dict
 
 class AISummaryService:
     def __init__(self):
@@ -17,29 +20,30 @@ class AISummaryService:
         self.client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
         self.logger = logging.getLogger(__name__)
         
+        # Initialize chunk storage service
+        self.storage_service = ChunkStorageService()
+        
         # Configuration
         self.whisper_model = "whisper-1"
         self.gpt_model = "gpt-4"
         self.max_tokens = 2000
         self.temperature = 0.7
         
-    async def generateRecordingSummaries(self, audio_file_path: str, video_info: Dict = None) -> Dict:
+    async def generateSummaries(self, transcription: str, video_info: Dict = None, recording_id: str = None) -> Dict:
         """
         Generate comprehensive summaries from a recording
         
         Args:
-            audio_file_path: Path to the audio file
+            transcription: The transcribed text content
             video_info: Optional video metadata
+            recording_id: ID of the recording for storage
             
         Returns:
             Dict containing transcription and summaries
         """
         try:
-            # Step 1: Transcribe audio using Whisper
-            transcription = await self._transcribe_audio(audio_file_path)
-            
             # Step 2: Generate multiple summary types
-            summaries = await self._generate_summaries(transcription, video_info)
+            summaries = await self._generate_summaries(transcription, video_info, recording_id)
             
             # Step 3: Combine results
             result = {
@@ -47,7 +51,7 @@ class AISummaryService:
                 'summaries': summaries,
                 'metadata': {
                     'timestamp': datetime.now().isoformat(),
-                    'audio_file': audio_file_path,
+                    'audio_file': "Supabase transcription", # Indicate it's a transcription
                     'video_info': video_info or {}
                 }
             }
@@ -56,142 +60,163 @@ class AISummaryService:
             
         except Exception as e:
             self.logger.error(f"Error generating summaries: {str(e)}")
-            return await self._generate_fallback_summary(audio_file_path, str(e))
+            return await self._generate_fallback_summary(transcription, str(e))
     
-    async def regenerateSummary(self, transcription: str, summary_type: str = "detailed") -> str:
-        """
-        Regenerate a specific type of summary from existing transcription
+    async def _generate_summaries(self, transcription: str, video_info: Dict = None, recording_id: str = None) -> Dict:
+        """Generate summaries using map-reduce approach with real chunk processing"""
         
-        Args:
-            transcription: The transcribed text
-            summary_type: Type of summary (short, medium, detailed)
-            
-        Returns:
-            Regenerated summary
-        """
-        try:
-            prompt = self._build_summary_prompt(transcription, summary_type)
-            
-            response = await self._call_gpt_api(prompt)
-            return response
-            
-        except Exception as e:
-            self.logger.error(f"Error regenerating summary: {str(e)}")
-            return f"Error regenerating {summary_type} summary: {str(e)}"
-    
-    async def generateLiveSummary(self, audio_chunk: bytes, previous_context: str = "") -> str:
-        """
-        Generate live summary from audio chunk (for real-time processing)
+        # Import the existing chunking function
+        from text_processing import preprocess_and_chunk_text
         
-        Args:
-            audio_chunk: Audio data chunk
-            previous_context: Previous summary context
-            
-        Returns:
-            Live summary update
-        """
-        try:
-            # Transcribe the chunk
-            transcription = await self._transcribe_audio_chunk(audio_chunk)
-            
-            # Generate incremental summary
-            prompt = self._build_live_summary_prompt(transcription, previous_context)
-            response = await self._call_gpt_api(prompt)
-            
-            return response
-            
-        except Exception as e:
-            self.logger.error(f"Error generating live summary: {str(e)}")
-            return ""
-    
-    async def testConnection(self) -> Dict:
-        """
-        Test OpenAI API connection and return status
+        # 1. First chunk the transcription using existing function
+        chunks = preprocess_and_chunk_text(transcription, chunk_size_tokens=2000, chunk_overlap_tokens=200)
+        self.logger.info(f"Generated {len(chunks)} semantic chunks from transcription")
         
-        Returns:
-            Dict with connection status and available models
-        """
-        try:
-            # Test GPT API
-            test_response = await self._call_gpt_api("Hello, this is a connection test.")
-            gpt_status = "connected" if test_response else "failed"
-            
-            # Get available models
-            models = await self.getAvailableModels()
-            
-            return {
-                'status': 'success',
-                'gpt_api': gpt_status,
-                'whisper_api': 'available',  # Whisper doesn't have a test endpoint
-                'available_models': models,
-                'timestamp': datetime.now().isoformat()
-            }
-            
-        except Exception as e:
-            return {
-                'status': 'error',
-                'error': str(e),
-                'timestamp': datetime.now().isoformat()
-            }
-    
-    async def getAvailableModels(self) -> List[str]:
-        """
-        Get list of available OpenAI models
+        # Store for chunk summaries
+        chunk_summaries = []
         
-        Returns:
-            List of available model names
-        """
-        try:
-            models = self.client.models.list()
-            return [model.id for model in models.data if 'gpt' in model.id or 'whisper' in model.id]
-        except Exception as e:
-            self.logger.error(f"Error getting models: {str(e)}")
-            return ['gpt-4', 'gpt-3.5-turbo', 'whisper-1']  # Fallback
-    
-    # Private methods
-    
-    async def _transcribe_audio(self, audio_file_path: str) -> str:
-        """Transcribe audio file using Whisper API"""
-        try:
-            with open(audio_file_path, 'rb') as audio_file:
-                transcript = self.client.audio.transcriptions.create(
-                    model=self.whisper_model,
-                    file=audio_file,
-                    response_format="text"
-                )
-            return transcript
-        except Exception as e:
-            self.logger.error(f"Error transcribing audio: {str(e)}")
-            raise
-    
-    async def _transcribe_audio_chunk(self, audio_chunk: bytes) -> str:
-        """Transcribe audio chunk for live processing"""
-        # For live processing, we'd need to save chunk to temp file
-        # This is a simplified version
-        temp_file = f"temp_chunk_{datetime.now().timestamp()}.wav"
-        try:
-            with open(temp_file, 'wb') as f:
-                f.write(audio_chunk)
-            return await self._transcribe_audio(temp_file)
-        finally:
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
-    
-    async def _generate_summaries(self, transcription: str, video_info: Dict = None) -> Dict:
-        """Generate multiple types of summaries"""
-        summary_types = ['short', 'medium', 'detailed']
-        summaries = {}
-        
-        for summary_type in summary_types:
+        # 2. Process each chunk through LLM (Map Stage)
+        for i, chunk_text in enumerate(chunks):
+            chunk_id = f"Chunk_{i+1:02d}"
+            self.logger.info(f"Processing {chunk_id} ({len(chunk_text)} chars)")
+            
             try:
-                prompt = self._build_summary_prompt(transcription, summary_type, video_info)
-                summary = await self._call_gpt_api(prompt)
-                summaries[summary_type] = summary
+                # Process chunk through LLM for executive, key points, and detailed summary
+                chunk_result = await self._process_chunk(chunk_text, chunk_id)
+                
+                # Create standardized chunk summary for storage
+                chunk_summary = create_chunk_summary_dict(
+                    chunk_id=chunk_id,
+                    chunk_text=chunk_text,
+                    executive_summary=chunk_result['executive_summary'],
+                    key_points=chunk_result['key_points'],
+                    detailed_summary=chunk_result['detailed_summary'],
+                    model_used="gpt-3.5-turbo"  # Using GPT-3.5 for chunks as planned
+                )
+                chunk_summaries.append(chunk_summary)
+                
             except Exception as e:
-                self.logger.error(f"Error generating {summary_type} summary: {str(e)}")
-                summaries[summary_type] = f"Error generating {summary_type} summary"
+                self.logger.error(f"Error processing {chunk_id}: {str(e)}")
+                # Create fallback chunk summary
+                chunk_summary = create_chunk_summary_dict(
+                    chunk_id=chunk_id,
+                    chunk_text=chunk_text,
+                    executive_summary=["Error processing chunk"],
+                    key_points=["Failed to generate key points"],
+                    detailed_summary=f"Error: {str(e)}",
+                    model_used="error"
+                )
+                chunk_summaries.append(chunk_summary)
+        
+        # 3. Store all chunk summaries in Supabase
+        if recording_id and chunk_summaries:
+            try:
+                await self.storage_service.store_chunk_summaries(recording_id, chunk_summaries)
+                self.logger.info(f"Stored {len(chunk_summaries)} real chunk summaries for recording {recording_id}")
+            except Exception as e:
+                self.logger.error(f"Error storing chunk summaries: {str(e)}")
+        
+        # 4. TODO: Implement reduce stage - merge chunk summaries into final comprehensive summaries
+        # For now, return basic summaries as placeholder
+        summaries = {
+            'short': "Executive summary placeholder (reduce stage needed)",
+            'medium': "Key points placeholder (reduce stage needed)", 
+            'detailed': "Detailed summary placeholder (reduce stage needed)"
+        }
         
         return summaries
+    
+    async def _process_chunk(self, chunk_text: str, chunk_id: str) -> Dict[str, Any]:
+        """
+        Process a single chunk through LLM to generate executive, key points, and detailed summary
+        
+        Args:
+            chunk_text: The text content of the chunk
+            chunk_id: Unique identifier for the chunk
+            
+        Returns:
+            Dictionary with executive_summary, key_points, and detailed_summary
+        """
+        try:
+            # Build prompt for chunk summarization (Map Stage)
+            prompt = f"""You are an expert summarizer. Summarize the following text chunk.
+
+[ChunkID: {chunk_id}]
+[Chunk Text]:
+{chunk_text}
+
+Tasks:
+1) Executive Summary: Provide 3-5 concise bullet points (≤25 words each) capturing the main ideas.
+2) Key Points: List 4-6 specific key points or facts from the text.
+3) Detailed Summary: Write a comprehensive summary (300-600 words) with clear structure.
+
+Output format (use exactly this structure):
+---EXECUTIVE---
+- [point 1]
+- [point 2]
+- [point 3]
+---KEYPOINTS---
+- [key point 1]
+- [key point 2]
+- [key point 3]
+- [key point 4]
+---DETAILED---
+[Detailed summary with clear headings and structure]
+"""
+            
+            # Call GPT-3.5-turbo
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are an expert AI summarizer. Provide clear, concise, and well-structured summaries."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1500
+            )
+            
+            # Parse the response
+            content = response.choices[0].message.content
+            
+            # Extract sections
+            executive_summary = self._extract_section(content, "---EXECUTIVE---", "---KEYPOINTS---")
+            key_points = self._extract_section(content, "---KEYPOINTS---", "---DETAILED---")
+            detailed_summary = self._extract_section(content, "---DETAILED---", None)
+            
+            return {
+                'executive_summary': [line.strip('- ').strip() for line in executive_summary.split('\n') if line.strip().startswith('-')],
+                'key_points': [line.strip('- ').strip() for line in key_points.split('\n') if line.strip().startswith('-')],
+                'detailed_summary': detailed_summary.strip()
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error processing chunk {chunk_id}: {str(e)}")
+            # Fallback response
+            return {
+                'executive_summary': [f"Error processing {chunk_id}"],
+                'key_points': ["Failed to generate key points"],
+                'detailed_summary': f"Error: {str(e)}"
+            }
+    
+    def _extract_section(self, content: str, start_marker: str, end_marker: str = None) -> str:
+        """Extract a section between markers"""
+        try:
+            start_idx = content.find(start_marker)
+            if start_idx == -1:
+                return ""
+            
+            start_idx += len(start_marker)
+            
+            if end_marker:
+                end_idx = content.find(end_marker, start_idx)
+                if end_idx == -1:
+                    return content[start_idx:].strip()
+                return content[start_idx:end_idx].strip()
+            else:
+                return content[start_idx:].strip()
+        except Exception as e:
+            self.logger.error(f"Error extracting section: {str(e)}")
+            return ""
     
     async def _call_gpt_api(self, prompt: str) -> str:
         """Make API call to GPT"""
@@ -256,31 +281,18 @@ class AISummaryService:
             """
         
         return base_prompt
-    
-    def _build_live_summary_prompt(self, transcription: str, previous_context: str) -> str:
-        """Build prompt for live summary generation"""
-        return f"""
-        Generate a brief summary update based on this new content, considering the previous context.
-        
-        Previous context: {previous_context}
-        
-        New content: {transcription}
-        
-        Provide a concise update that builds on the previous summary.
-        """
-    
-    async def _generate_fallback_summary(self, audio_file_path: str, error: str) -> Dict:
+
+    async def _generate_fallback_summary(self, transcription: str, error: str) -> Dict:
         """Generate fallback summary when main process fails"""
         return {
-            'transcription': f"Transcription failed: {error}",
+            'transcription': transcription,
             'summaries': {
-                'short': f"Unable to process audio file: {error}",
-                'medium': f"Audio processing failed. Error: {error}",
-                'detailed': f"Failed to generate summary from {audio_file_path}. Error details: {error}"
+                'short': f"Unable to generate summary: {error}",
+                'medium': f"Summary generation failed. Error: {error}",
+                'detailed': f"Failed to generate summary. Error details: {error}"
             },
             'metadata': {
                 'timestamp': datetime.now().isoformat(),
-                'audio_file': audio_file_path,
                 'error': error,
                 'fallback': True
             }
