@@ -102,13 +102,16 @@ class TranscriptionService:
     async def _download_audio_file(self, file_path: str) -> Optional[bytes]:
         """Download audio file from Supabase Storage"""
         try:
-            # Extract bucket name and file path
-            if '/' in file_path:
-                bucket_name, object_path = file_path.split('/', 1)
-            else:
-                bucket_name = 'recordings'
-                object_path = file_path
+            # Ensure the bucket name is always 'recordings' for audio files
+            # The file_path from the database should be treated as the object path within this bucket.
+            bucket_name = 'recordings'
+            object_path = file_path
             
+            # If the file_path from DB already includes the bucket name (e.g., 'recordings/temp-user/audio.webm'),
+            # we need to remove the bucket name prefix to get the correct object_path for Supabase storage operations.
+            if file_path.startswith(f'{bucket_name}/'):
+                object_path = file_path.split(f'{bucket_name}/', 1)[1]
+
             # Download file from storage
             response = self.supabase.storage.from_(bucket_name).download(object_path)
             return response
