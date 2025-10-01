@@ -42,9 +42,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize services (once at startup, not per request)
-transcription_service = TranscriptionService()
-summary_service = AISummaryService()
+# Initialize services (deferred - will be initialized on first use)
+transcription_service = None
+summary_service = None
+
+def get_transcription_service():
+    """Get or initialize transcription service"""
+    global transcription_service
+    if transcription_service is None:
+        transcription_service = TranscriptionService()
+    return transcription_service
+
+def get_summary_service():
+    """Get or initialize summary service"""
+    global summary_service
+    if summary_service is None:
+        summary_service = AISummaryService()
+    return summary_service
 
 
 # Pydantic models for request/response
@@ -106,7 +120,8 @@ async def transcribe_recording(recording_id: str):
     try:
         logger.info(f"Starting transcription for recording {recording_id}")
         
-        result = await transcription_service.transcribe_recording(recording_id)
+        service = get_transcription_service()
+        result = await service.transcribe_recording(recording_id)
         
         if result['status'] == 'error':
             raise HTTPException(status_code=500, detail=result['error'])
@@ -138,7 +153,8 @@ async def summarize_recording(recording_id: str):
     try:
         logger.info(f"Starting summarization for recording {recording_id}")
         
-        result = await summary_service.generate_summaries_for_recording(recording_id)
+        service = get_summary_service()
+        result = await service.generate_summaries_for_recording(recording_id)
         
         if result['status'] == 'error':
             raise HTTPException(status_code=500, detail=result['error'])
@@ -171,12 +187,14 @@ async def process_recording(recording_id: str, background_tasks: BackgroundTasks
         logger.info(f"Starting full processing for recording {recording_id}")
         
         # Step 1: Transcribe
-        transcription_result = await transcription_service.transcribe_recording(recording_id)
+        transcription_svc = get_transcription_service()
+        transcription_result = await transcription_svc.transcribe_recording(recording_id)
         if transcription_result['status'] == 'error':
             raise HTTPException(status_code=500, detail=transcription_result['error'])
         
         # Step 2: Summarize
-        summary_result = await summary_service.generate_summaries_for_recording(recording_id)
+        summary_svc = get_summary_service()
+        summary_result = await summary_svc.generate_summaries_for_recording(recording_id)
         if summary_result['status'] == 'error':
             raise HTTPException(status_code=500, detail=summary_result['error'])
         
