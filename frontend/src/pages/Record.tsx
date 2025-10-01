@@ -37,10 +37,10 @@ export default function Record() {
       };
 
       // Upload audio file to Supabase Storage first
-      const filePath = `${TEMP_USER_ID}/${recordingId}.webm`;
+      const objectPath = `${TEMP_USER_ID}/${recordingId}.webm`; // Path within the bucket
       const { error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .upload(filePath, recordingState.audioBlob, {
+        .upload(objectPath, recordingState.audioBlob, {
           contentType: 'audio/webm',
           upsert: false
         });
@@ -52,7 +52,7 @@ export default function Record() {
       // Get the public URL for the uploaded file
       const { data: urlData } = supabase.storage
         .from(STORAGE_BUCKET)
-        .getPublicUrl(filePath);
+        .getPublicUrl(objectPath);
 
       // Save directly to Supabase database
       const { error: dbError } = await supabase
@@ -61,7 +61,7 @@ export default function Record() {
           title: recordingTitle,
           duration_seconds: recordingState.duration,
           file_size_bytes: recordingState.audioBlob.size,
-          file_path: filePath,
+          file_path: `${STORAGE_BUCKET}/${objectPath}`, // Store full path including bucket
           file_url: urlData.publicUrl,
           metadata: JSON.stringify(metadata),
           status: 'recorded',
@@ -70,7 +70,7 @@ export default function Record() {
 
       if (dbError) {
         // If database save fails, try to clean up the uploaded file
-        await supabase.storage.from(STORAGE_BUCKET).remove([filePath]);
+        await supabase.storage.from(STORAGE_BUCKET).remove([objectPath]);
         throw new Error(`Failed to save recording to database: ${dbError.message}`);
       }
 
