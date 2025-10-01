@@ -75,19 +75,19 @@ class AISummaryService:
         Returns:
             List of dicts containing chunk_id and chunk_text
         """
-        try:
-            # List all files in the recording's folder in chunks bucket
-            files = self.supabase.storage.from_("chunks").list(recording_id)
+            try:
+                # List all files in the recording's folder in Chunks bucket (note: capital C to match Supabase bucket name)
+                files = self.supabase.storage.from_("Chunks").list(recording_id)
             
             chunks = []
             for file in files:
                 if file['name'].endswith('.txt'):
                     # Extract chunk_id from filename (e.g., "chunk_001.txt" -> "chunk_001")
                     chunk_id = file['name'].replace('.txt', '')
-                    chunk_file_path = f"{recording_id}/{file['name']}"
-                    
-                    # Download chunk content
-                    chunk_content = self.supabase.storage.from_("chunks").download(chunk_file_path)
+                        chunk_file_path = f"{recording_id}/{file['name']}"
+                        
+                        # Download chunk content
+                        chunk_content = self.supabase.storage.from_("Chunks").download(chunk_file_path)
                     chunk_text = chunk_content.decode('utf-8')
                     
                     chunks.append({
@@ -164,15 +164,15 @@ Provide a clear, concise summary (200-400 words) that captures the main ideas an
                 "created_at": datetime.now().isoformat()
             }
             
-            # Upload summary to "summaries" bucket
-            self.supabase.storage.from_("summaries").upload(
-                summary_file_path,
-                summary.encode('utf-8'),
-                {
-                    "content-type": "text/plain",
-                    "x-metadata": json.dumps(metadata)
-                }
-            )
+                # Upload summary to "Summaries" bucket (note: capital S to match Supabase bucket name)
+                self.supabase.storage.from_("Summaries").upload(
+                    summary_file_path,
+                    summary.encode('utf-8'),
+                    {
+                        "content-type": "text/plain",
+                        "x-metadata": json.dumps(metadata)
+                    }
+                )
             
             self.logger.info(f"Stored summary for {chunk_id} in recording {recording_id}")
             

@@ -148,11 +148,11 @@ class TranscriptionService:
     async def _update_recording_transcription(self, recording_id: str, transcription: str) -> None:
         """Store transcription in Supabase Storage and update database with file path"""
         try:
-            # 1. Store transcription text in Supabase Storage (transcription bucket)
+            # 1. Store transcription text in Supabase Storage (Transcription bucket)
             transcription_file_path = f"{recording_id}/transcription.txt"
             
-            # Upload to transcription bucket
-            self.supabase.storage.from_("transcription").upload(
+            # Upload to Transcription bucket (note: capital T to match Supabase bucket name)
+            self.supabase.storage.from_("Transcription").upload(
                 transcription_file_path, 
                 transcription.encode('utf-8'),
                 {"content-type": "text/plain"}
@@ -166,7 +166,7 @@ class TranscriptionService:
             }
             
             response = self.supabase.table('recordings').update(update_data).eq('id', recording_id).execute()
-            self.logger.info(f"Stored transcription for {recording_id} at transcription/{transcription_file_path}")
+            self.logger.info(f"Stored transcription for {recording_id} at Transcription/{transcription_file_path}")
             
         except Exception as e:
             self.logger.error(f"Error storing transcription for {recording_id}: {str(e)}")

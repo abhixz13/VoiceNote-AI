@@ -98,10 +98,10 @@ async def process_transcription(recording_id: str) -> None:
             logger.error(f"No transcription found for recording {recording_id}")
             return
         
-        # 2. Download transcription from Supabase Storage
-        transcription_content = supabase.storage.from_("transcription").download(transcription_file_path)
-        transcription = transcription_content.decode('utf-8')
-        logger.info(f"Downloaded transcription for recording {recording_id}")
+            # 2. Download transcription from Supabase Storage
+            transcription_content = supabase.storage.from_("Transcription").download(transcription_file_path)
+            transcription = transcription_content.decode('utf-8')
+            logger.info(f"Downloaded transcription for recording {recording_id}")
         
         # 3. Chunk the transcription
         chunks = preprocess_and_chunk_text(
@@ -125,17 +125,17 @@ async def process_transcription(recording_id: str) -> None:
                 "created_at": datetime.now().isoformat()
             }
             
-            # Upload chunk to "chunks" bucket
-            supabase.storage.from_("chunks").upload(
-                chunk_file_path,
-                chunk_text.encode('utf-8'),
-                {
-                    "content-type": "text/plain",
-                    "x-metadata": json.dumps(metadata)
-                }
-            )
-            
-            logger.info(f"Stored {chunk_id} for recording {recording_id}")
+                # Upload chunk to "Chunks" bucket (note: capital C to match Supabase bucket name)
+                supabase.storage.from_("Chunks").upload(
+                    chunk_file_path,
+                    chunk_text.encode('utf-8'),
+                    {
+                        "content-type": "text/plain",
+                        "x-metadata": json.dumps(metadata)
+                    }
+                )
+                
+                logger.info(f"Stored {chunk_id} for recording {recording_id}")
         
         # 5. Trigger AI Summary Service
         await _trigger_summarization(recording_id)
