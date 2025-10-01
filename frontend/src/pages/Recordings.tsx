@@ -17,7 +17,7 @@ export default function Recordings() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const limit = 10;
-  const RAILWAY_BACKEND_URL = 'https://voicenote-ai-backend.up.railway.app';
+  const RAILWAY_BACKEND_URL = 'https://voicenote-ai-backend.up.railway.app:8080';
 
   const fetchRecordings = async (page: number) => {
     setLoading(true);
@@ -112,6 +112,35 @@ export default function Recordings() {
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const handleSummarize = async (recording: RecordingType) => {
+    setSummarizing(recording.id);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${recording.id}/process`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to process recording' }));
+        throw new Error(errorData.detail || 'Failed to process recording');
+      }
+
+      setSuccessMessage('Processing started! Transcription and summarization in progress.');
+      
+      // Refresh recordings to get updated status
+      await fetchRecordings(currentPage);
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to process recording');
+    } finally {
+      setSummarizing(null);
+    }
+  };
+
   const handleDownload = async (recording: RecordingType) => {
     if (!recording.file_path) {
       alert('No audio file available for download');
@@ -146,35 +175,6 @@ export default function Recordings() {
     } catch (error) {
       console.error('Error downloading audio:', error);
       alert(`Error downloading audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  };
-
-  const handleSummarize = async (recording: RecordingType) => {
-    setSummarizing(recording.id);
-    setError(null);
-    setSuccessMessage(null);
-
-    try {
-      const response = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${recording.id}/transcribe`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Failed to start summarization' }));
-        throw new Error(errorData.detail || 'Failed to start summarization');
-      }
-
-      setSuccessMessage('Summarization started successfully!');
-      
-      // Refresh recordings to get updated status
-      await fetchRecordings(currentPage);
-      
-      // Clear success message after 5 seconds
-      setTimeout(() => setSuccessMessage(null), 5000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start summarization');
-    } finally {
-      setSummarizing(null);
     }
   };
 

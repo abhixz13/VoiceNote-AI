@@ -16,8 +16,13 @@ from supabase_client import get_supabase_client
 class TranscriptionService:
     def __init__(self):
         """Initialize the Transcription Service"""
-        self.client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        # Initialize Supabase first
         self.supabase = get_supabase_client()
+        
+        # Initialize OpenAI client separately to avoid proxy conflicts
+        self.client = openai.OpenAI(
+            api_key=os.getenv('OPENAI_API_KEY')
+        )
         self.logger = logging.getLogger(__name__)
         
         # Configuration
