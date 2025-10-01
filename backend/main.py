@@ -69,10 +69,20 @@ class SummaryResponse(BaseModel):
     timestamp: str
 
 
-# Health check endpoint
+# Health check endpoints
 @app.get("/")
 async def root():
-    """Health check endpoint"""
+    """Root endpoint"""
+    return {
+        "status": "healthy",
+        "service": "VoiceNote AI Backend",
+        "version": "1.0.0",
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/health")
+async def health():
+    """Health check endpoint for Railway"""
     return {
         "status": "healthy",
         "service": "VoiceNote AI Backend",
