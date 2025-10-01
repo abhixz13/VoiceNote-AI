@@ -52,11 +52,20 @@ class TranscriptionService:
                     'recording_id': recording_id
                 }
             
-            # 3. Transcribe audio using Whisper
-            transcription = await self._transcribe_audio_content(audio_content)
+            # 3. Transcribe audio using Whisper (HARDCODED FOR TESTING)
+            # transcription = await self._transcribe_audio_content(audio_content)
+            #transcription = await self._transcribe_audio_content(audio_content)
+            # Load hardcoded transcription from sample_ai_text.txt
+            import os
+            sample_file = os.path.join(os.path.dirname(__file__), 'sample_ai_text.txt')
+            with open(sample_file, 'r') as f:
+                transcription = f.read()
             
-            # 4. Update recording with transcription
+            # 4. Store transcription in Supabase
             await self._update_recording_transcription(recording_id, transcription)
+            
+            # 5. Trigger text_processing to chunk and process
+            await self._trigger_text_processing(recording_id)
             
             return {
                 'status': 'success',
@@ -171,3 +180,24 @@ class TranscriptionService:
             
         except Exception as e:
             self.logger.error(f"Error updating recording status {recording_id}: {str(e)}")
+    
+    async def _trigger_text_processing(self, recording_id: str) -> None:
+        """
+        Trigger text_processing to chunk transcription and store in Supabase
+        
+        Args:
+            recording_id: ID of the recording
+        """
+        try:
+            from text_processing import process_transcription
+            
+            self.logger.info(f"Triggering text processing for recording {recording_id}")
+            
+            # Call text_processing to handle chunking and storage
+            await process_transcription(recording_id)
+            
+            self.logger.info(f"Text processing completed for recording {recording_id}")
+            
+        except Exception as e:
+            self.logger.error(f"Error triggering text processing for {recording_id}: {str(e)}")
+            # Don't raise - processing failure shouldn't fail the transcription

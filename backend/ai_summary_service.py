@@ -1,299 +1,176 @@
 """
 AISummaryService Layer
-Handles audio transcription and text summarization using OpenAI APIs
+Reads chunks from Supabase Storage, generates summaries, and stores them
 """
 
 import openai
 import os
 import json
-import asyncio
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List
 from datetime import datetime
 import logging
 
-# Import the new chunk storage service
-from chunk_storage_service import ChunkStorageService, create_chunk_summary_dict
+from supabase_client import get_supabase_client
 
 class AISummaryService:
     def __init__(self):
         """Initialize the AI Summary Service"""
         self.client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        self.supabase = get_supabase_client()
         self.logger = logging.getLogger(__name__)
         
-        # Initialize chunk storage service
-        self.storage_service = ChunkStorageService()
-        
         # Configuration
-        self.whisper_model = "whisper-1"
-        self.gpt_model = "gpt-4"
-        self.max_tokens = 2000
+        self.gpt_model = "gpt-3.5-turbo"
+        self.max_tokens = 1500
         self.temperature = 0.7
         
-    async def generateSummaries(self, transcription: str, video_info: Dict = None, recording_id: str = None) -> Dict:
+    async def process_chunks_for_recording(self, recording_id: str) -> None:
         """
-        Generate comprehensive summaries from a recording
+        Main entry point: Read chunks from Supabase Storage, generate summaries, and store them
         
         Args:
-            transcription: The transcribed text content
-            video_info: Optional video metadata
-            recording_id: ID of the recording for storage
-            
-        Returns:
-            Dict containing transcription and summaries
+            recording_id: ID of the recording to process
         """
         try:
-            # Step 2: Generate multiple summary types
-            summaries = await self._generate_summaries(transcription, video_info, recording_id)
+            self.logger.info(f"Processing chunks for recording {recording_id}")
             
-            # Step 3: Combine results
-            result = {
-                'transcription': transcription,
-                'summaries': summaries,
-                'metadata': {
-                    'timestamp': datetime.now().isoformat(),
-                    'audio_file': "Supabase transcription", # Indicate it's a transcription
-                    'video_info': video_info or {}
-                }
-            }
+            # 1. Get list of chunks from Supabase Storage
+            chunks = await self._get_chunks_from_storage(recording_id)
             
-            return result
+            if not chunks:
+                self.logger.warning(f"No chunks found for recording {recording_id}")
+                return
+            
+            # 2. Process each chunk and generate summary
+            for chunk_data in chunks:
+                chunk_id = chunk_data['chunk_id']
+                chunk_text = chunk_data['chunk_text']
+                
+                self.logger.info(f"Generating summary for {chunk_id}")
+                
+                # Generate summary using GPT
+                summary = await self._generate_chunk_summary(chunk_text, chunk_id)
+                
+                # 3. Store summary in Supabase Storage "summaries" bucket
+                await self._store_summary(recording_id, chunk_id, summary)
+            
+            self.logger.info(f"Completed summarization for recording {recording_id}")
             
         except Exception as e:
-            self.logger.error(f"Error generating summaries: {str(e)}")
-            return await self._generate_fallback_summary(transcription, str(e))
+            self.logger.error(f"Error processing chunks for recording {recording_id}: {str(e)}")
+            raise
     
-    async def _generate_summaries(self, transcription: str, video_info: Dict = None, recording_id: str = None) -> Dict:
-        """Generate summaries using map-reduce approach with real chunk processing"""
-        
-        # Import the existing chunking function
-        from text_processing import preprocess_and_chunk_text
-        
-        # 1. First chunk the transcription using existing function
-        chunks = preprocess_and_chunk_text(transcription, chunk_size_tokens=2000, chunk_overlap_tokens=200)
-        self.logger.info(f"Generated {len(chunks)} semantic chunks from transcription")
-        
-        # Store for chunk summaries
-        chunk_summaries = []
-        
-        # 2. Process each chunk through LLM (Map Stage)
-        for i, chunk_text in enumerate(chunks):
-            chunk_id = f"Chunk_{i+1:02d}"
-            self.logger.info(f"Processing {chunk_id} ({len(chunk_text)} chars)")
-            
-            try:
-                # Process chunk through LLM for executive, key points, and detailed summary
-                chunk_result = await self._process_chunk(chunk_text, chunk_id)
-                
-                # Create standardized chunk summary for storage
-                chunk_summary = create_chunk_summary_dict(
-                    chunk_id=chunk_id,
-                    chunk_text=chunk_text,
-                    executive_summary=chunk_result['executive_summary'],
-                    key_points=chunk_result['key_points'],
-                    detailed_summary=chunk_result['detailed_summary'],
-                    model_used="gpt-3.5-turbo"  # Using GPT-3.5 for chunks as planned
-                )
-                chunk_summaries.append(chunk_summary)
-                
-            except Exception as e:
-                self.logger.error(f"Error processing {chunk_id}: {str(e)}")
-                # Create fallback chunk summary
-                chunk_summary = create_chunk_summary_dict(
-                    chunk_id=chunk_id,
-                    chunk_text=chunk_text,
-                    executive_summary=["Error processing chunk"],
-                    key_points=["Failed to generate key points"],
-                    detailed_summary=f"Error: {str(e)}",
-                    model_used="error"
-                )
-                chunk_summaries.append(chunk_summary)
-        
-        # 3. Store all chunk summaries in Supabase
-        if recording_id and chunk_summaries:
-            try:
-                await self.storage_service.store_chunk_summaries(recording_id, chunk_summaries)
-                self.logger.info(f"Stored {len(chunk_summaries)} real chunk summaries for recording {recording_id}")
-            except Exception as e:
-                self.logger.error(f"Error storing chunk summaries: {str(e)}")
-        
-        # 4. TODO: Implement reduce stage - merge chunk summaries into final comprehensive summaries
-        # For now, return basic summaries as placeholder
-        summaries = {
-            'short': "Executive summary placeholder (reduce stage needed)",
-            'medium': "Key points placeholder (reduce stage needed)", 
-            'detailed': "Detailed summary placeholder (reduce stage needed)"
-        }
-        
-        return summaries
-    
-    async def _process_chunk(self, chunk_text: str, chunk_id: str) -> Dict[str, Any]:
+    async def _get_chunks_from_storage(self, recording_id: str) -> List[Dict]:
         """
-        Process a single chunk through LLM to generate executive, key points, and detailed summary
+        Download all chunks for a recording from Supabase Storage
+        
+        Args:
+            recording_id: ID of the recording
+            
+        Returns:
+            List of dicts containing chunk_id and chunk_text
+        """
+        try:
+            # List all files in the recording's folder in chunks bucket
+            files = self.supabase.storage.from_("chunks").list(recording_id)
+            
+            chunks = []
+            for file in files:
+                if file['name'].endswith('.txt'):
+                    # Extract chunk_id from filename (e.g., "chunk_001.txt" -> "chunk_001")
+                    chunk_id = file['name'].replace('.txt', '')
+                    chunk_file_path = f"{recording_id}/{file['name']}"
+                    
+                    # Download chunk content
+                    chunk_content = self.supabase.storage.from_("chunks").download(chunk_file_path)
+                    chunk_text = chunk_content.decode('utf-8')
+                    
+                    chunks.append({
+                        'chunk_id': chunk_id,
+                        'chunk_text': chunk_text
+                    })
+            
+            # Sort by chunk_id to maintain order
+            chunks.sort(key=lambda x: x['chunk_id'])
+            
+            self.logger.info(f"Retrieved {len(chunks)} chunks for recording {recording_id}")
+            return chunks
+            
+        except Exception as e:
+            self.logger.error(f"Error getting chunks from storage for {recording_id}: {str(e)}")
+            return []
+    
+    async def _generate_chunk_summary(self, chunk_text: str, chunk_id: str) -> str:
+        """
+        Generate summary for a single chunk using GPT
         
         Args:
             chunk_text: The text content of the chunk
             chunk_id: Unique identifier for the chunk
             
         Returns:
-            Dictionary with executive_summary, key_points, and detailed_summary
+            Summary text
         """
         try:
-            # Build prompt for chunk summarization (Map Stage)
-            prompt = f"""You are an expert summarizer. Summarize the following text chunk.
+            # Build prompt for chunk summarization
+            prompt = f"""You are an expert summarizer. Summarize the following text chunk concisely.
 
 [ChunkID: {chunk_id}]
 [Chunk Text]:
 {chunk_text}
 
-Tasks:
-1) Executive Summary: Provide 3-5 concise bullet points (≤25 words each) capturing the main ideas.
-2) Key Points: List 4-6 specific key points or facts from the text.
-3) Detailed Summary: Write a comprehensive summary (300-600 words) with clear structure.
+Provide a clear, concise summary (200-400 words) that captures the main ideas and key points."""
 
-Output format (use exactly this structure):
----EXECUTIVE---
-- [point 1]
-- [point 2]
-- [point 3]
----KEYPOINTS---
-- [key point 1]
-- [key point 2]
-- [key point 3]
-- [key point 4]
----DETAILED---
-[Detailed summary with clear headings and structure]
-"""
-            
             # Call GPT-3.5-turbo
-            response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are an expert AI summarizer. Provide clear, concise, and well-structured summaries."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=1500
-            )
-            
-            # Parse the response
-            content = response.choices[0].message.content
-            
-            # Extract sections
-            executive_summary = self._extract_section(content, "---EXECUTIVE---", "---KEYPOINTS---")
-            key_points = self._extract_section(content, "---KEYPOINTS---", "---DETAILED---")
-            detailed_summary = self._extract_section(content, "---DETAILED---", None)
-            
-            return {
-                'executive_summary': [line.strip('- ').strip() for line in executive_summary.split('\n') if line.strip().startswith('-')],
-                'key_points': [line.strip('- ').strip() for line in key_points.split('\n') if line.strip().startswith('-')],
-                'detailed_summary': detailed_summary.strip()
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Error processing chunk {chunk_id}: {str(e)}")
-            # Fallback response
-            return {
-                'executive_summary': [f"Error processing {chunk_id}"],
-                'key_points': ["Failed to generate key points"],
-                'detailed_summary': f"Error: {str(e)}"
-            }
-    
-    def _extract_section(self, content: str, start_marker: str, end_marker: str = None) -> str:
-        """Extract a section between markers"""
-        try:
-            start_idx = content.find(start_marker)
-            if start_idx == -1:
-                return ""
-            
-            start_idx += len(start_marker)
-            
-            if end_marker:
-                end_idx = content.find(end_marker, start_idx)
-                if end_idx == -1:
-                    return content[start_idx:].strip()
-                return content[start_idx:end_idx].strip()
-            else:
-                return content[start_idx:].strip()
-        except Exception as e:
-            self.logger.error(f"Error extracting section: {str(e)}")
-            return ""
-    
-    async def _call_gpt_api(self, prompt: str) -> str:
-        """Make API call to GPT"""
-        try:
             response = self.client.chat.completions.create(
                 model=self.gpt_model,
                 messages=[
-                    {"role": "system", "content": "You are an expert AI content analyst."},
+                    {"role": "system", "content": "You are an expert AI summarizer. Provide clear and concise summaries."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=self.max_tokens,
-                temperature=self.temperature
+                temperature=self.temperature,
+                max_tokens=self.max_tokens
             )
-            return response.choices[0].message.content
+            
+            summary = response.choices[0].message.content
+            self.logger.info(f"Generated summary for {chunk_id}")
+            return summary
+            
         except Exception as e:
-            self.logger.error(f"Error calling GPT API: {str(e)}")
-            raise
+            self.logger.error(f"Error generating summary for {chunk_id}: {str(e)}")
+            return f"Error generating summary: {str(e)}"
     
-    def _build_summary_prompt(self, transcription: str, summary_type: str, video_info: Dict = None) -> str:
-        """Build appropriate prompt based on summary type"""
-        base_prompt = f"""
-        Create a {summary_type} summary of the following transcribed content.
-        
-        Transcription:
-        {transcription}
+    async def _store_summary(self, recording_id: str, chunk_id: str, summary: str) -> None:
         """
+        Store summary in Supabase Storage "summaries" bucket
         
-        if video_info:
-            base_prompt += f"""
+        Args:
+            recording_id: ID of the recording
+            chunk_id: ID of the chunk
+            summary: The generated summary text
+        """
+        try:
+            summary_file_path = f"{recording_id}/{chunk_id}_summary.txt"
             
-            Video Information:
-            - Title: {video_info.get('title', 'Unknown')}
-            - Duration: {video_info.get('duration', 'Unknown')}
-            - Uploader: {video_info.get('uploader', 'Unknown')}
-            """
-        
-        if summary_type == 'short':
-            base_prompt += """
-            
-            Requirements for short summary:
-            - 2-3 sentences maximum
-            - Focus on main topic and key takeaway
-            - Be concise and direct
-            """
-        elif summary_type == 'medium':
-            base_prompt += """
-            
-            Requirements for medium summary:
-            - 1-2 paragraphs
-            - Include main points and key insights
-            - Mention important concepts or technologies
-            """
-        else:  # detailed
-            base_prompt += """
-            
-            Requirements for detailed summary:
-            - Comprehensive overview
-            - Structured with clear sections
-            - Include technical details and explanations
-            - Highlight key concepts and their applications
-            - Provide actionable insights
-            """
-        
-        return base_prompt
-
-    async def _generate_fallback_summary(self, transcription: str, error: str) -> Dict:
-        """Generate fallback summary when main process fails"""
-        return {
-            'transcription': transcription,
-            'summaries': {
-                'short': f"Unable to generate summary: {error}",
-                'medium': f"Summary generation failed. Error: {error}",
-                'detailed': f"Failed to generate summary. Error details: {error}"
-            },
-            'metadata': {
-                'timestamp': datetime.now().isoformat(),
-                'error': error,
-                'fallback': True
+            # Create metadata
+            metadata = {
+                "recording_id": recording_id,
+                "chunk_id": chunk_id,
+                "created_at": datetime.now().isoformat()
             }
-        }
+            
+            # Upload summary to "summaries" bucket
+            self.supabase.storage.from_("summaries").upload(
+                summary_file_path,
+                summary.encode('utf-8'),
+                {
+                    "content-type": "text/plain",
+                    "x-metadata": json.dumps(metadata)
+                }
+            )
+            
+            self.logger.info(f"Stored summary for {chunk_id} in recording {recording_id}")
+            
+        except Exception as e:
+            self.logger.error(f"Error storing summary for {chunk_id}: {str(e)}")
+            raise
