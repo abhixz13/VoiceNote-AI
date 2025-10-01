@@ -1,6 +1,15 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-supabase==2.3.0
+# Supabase client (Python SDK)
+supabase>=2.4.0,<3.0
+
+# HTTP client - compatible with supabase-py
+httpx>=0.27.0,<0.28
+
+# Required dependencies (supabase-py uses these under the hood)
+httpcore>=1.0.0,<2.0
+websockets>=12.0,<13.0
+
 openai==1.3.0
 python-multipart==0.0.6
 pydantic==2.5.0
