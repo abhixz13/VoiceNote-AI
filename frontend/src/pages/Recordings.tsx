@@ -17,7 +17,7 @@ export default function Recordings() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const limit = 10;
-  const RAILWAY_BACKEND_URL = 'https://voicenote-ai-backend.up.railway.app:8080';
+  const RAILWAY_BACKEND_URL = 'https://voicenote-ai-backend.up.railway.app';
 
   const fetchRecordings = async (page: number) => {
     setLoading(true);
