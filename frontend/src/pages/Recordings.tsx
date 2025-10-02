@@ -64,26 +64,24 @@ export default function Recordings() {
 
     setDeleting(recording.recording_id);
     try {
-      // Delete from database first
-      const { error: dbError } = await supabase
-        .from('recordings')
-        .delete()
-        .eq('recording_id', recording.recording_id);
+      // Use the backend API for proper cascading delete
+      const response = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${recording.recording_id}`, {
+        method: 'DELETE',
+      });
 
-      if (dbError) {
-        throw new Error(`Failed to delete recording from database: ${dbError.message}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to delete recording' }));
+        throw new Error(errorData.detail || 'Failed to delete recording');
       }
 
-      // Delete audio file from Supabase Storage if file_path exists
-      if (recording.file_path) {
-        const { error: storageError } = await supabase.storage
-          .from(STORAGE_BUCKET)
-          .remove([recording.file_path]);
-
-        if (storageError) {
-          console.warn('Failed to delete audio file from storage:', storageError);
-          // Don't throw error here as the database record is already deleted
-        }
+      const result = await response.json();
+      
+      // Show success message
+      setSuccessMessage(`Successfully deleted recording: ${recording.title}`);
+      
+      // Log any storage warnings
+      if (result.storage_warnings && result.storage_warnings.length > 0) {
+        console.warn('Storage cleanup warnings:', result.storage_warnings);
       }
 
       // Refresh the current page
