@@ -303,6 +303,17 @@ class TranscriptionService:
                         'message': 'Failed to transcribe recording',
                         'recording_id': recording_id
                     }
+                
+                # After transcription, it will automatically trigger text processing and summarization
+                # The result from transcribe_recording already contains the full pipeline output
+                return {
+                    'status': 'success',
+                    'message': 'Transcription and summary generation completed successfully',
+                    'recording_id': recording_id,
+                    'unified_summary': transcription_result.get('unified_summary'),
+                    'summary_id': transcription_result.get('summary_id'),
+                    'summary_path': transcription_result.get('summary_path')
+                }
             else:
                 # Transcription exists, get the latest one
                 latest_transcription = transcription_response.data[-1]  # Get most recent
@@ -315,15 +326,22 @@ class TranscriptionService:
                 
                 # Trigger text processing (chunking + summarization)
                 self.logger.info(f"Triggering text processing for existing transcription {transcription_id}")
-                await self._trigger_text_processing(recording_id, transcription_id, transcription_text)
-            
-            # Return success status with unified summary
-            return {
-                'status': 'success',
-                'message': 'Summary generation completed successfully',
-                'recording_id': recording_id,
-                'unified_summary': None  # Will be populated by text processing pipeline
-            }
+                processing_result = await self._trigger_text_processing(recording_id, transcription_id, transcription_text)
+                
+                # Update recording status to 'summarized' after successful processing
+                if processing_result and processing_result.get('status') == 'success':
+                    await self._update_recording_status(recording_id, 'summarized')
+                    self.logger.info(f"Updated recording {recording_id} status to 'summarized'")
+                
+                # Return success status with unified summary
+                return {
+                    'status': 'success',
+                    'message': 'Summary generation completed successfully',
+                    'recording_id': recording_id,
+                    'unified_summary': processing_result.get('unified_summary'),
+                    'summary_id': processing_result.get('summary_id'),
+                    'summary_path': processing_result.get('summary_path')
+                }
             
         except Exception as e:
             self.logger.error(f"Error in summarize_recording for {recording_id}: {str(e)}")

@@ -329,14 +329,24 @@ export default function Recordings() {
                             View
                           </button>
                           
-                          <button
-                            onClick={() => handleSummarize(recording)}
-                            disabled={summarizing === recording.recording_id}
-                            className="inline-flex items-center gap-1 bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:bg-purple-900 dark:hover:bg-purple-800 dark:text-purple-300"
-                          >
-                            <Sparkles className="w-4 h-4" />
-                            {summarizing === recording.recording_id ? 'Processing...' : 'Summarize'}
-                          </button>
+                          {recording.status === 'summarized' ? (
+                            <button
+                              onClick={() => navigate(`/recordings/${recording.recording_id}`)}
+                              className="inline-flex items-center gap-1 bg-green-100 hover:bg-green-200 text-green-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors dark:bg-green-900 dark:hover:bg-green-800 dark:text-green-300"
+                            >
+                              <Sparkles className="w-4 h-4" />
+                              View Summary
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleSummarize(recording)}
+                              disabled={summarizing === recording.recording_id}
+                              className="inline-flex items-center gap-1 bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:bg-purple-900 dark:hover:bg-purple-800 dark:text-purple-300"
+                            >
+                              <Sparkles className="w-4 h-4" />
+                              {summarizing === recording.recording_id ? 'Processing...' : 'Summarize'}
+                            </button>
+                          )}
                           
                           {recording.file_path && (
                             <button
