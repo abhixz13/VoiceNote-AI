@@ -18,7 +18,6 @@ export default function Record() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [gain, setGain] = useState(1.0);
   const [noiseReduction, setNoiseReduction] = useState(true);
-  const [savedRecordingId, setSavedRecordingId] = useState<string | null>(null); // New state to store generated recording_id
 
   const handleSave = async () => {
     if (!recordingState.audioBlob) return;
@@ -77,7 +76,6 @@ export default function Record() {
       }
 
       console.log('Recording saved successfully to database with ID:', insertData.recording_id);
-      setSavedRecordingId(insertData.recording_id); // Store the generated recording_id
 
       // Reset form and navigate to recordings list
       recordingControls.clearRecording();
