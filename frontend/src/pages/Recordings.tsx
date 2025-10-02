@@ -12,8 +12,8 @@ export default function Recordings() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
-  const [deleting, setDeleting] = useState<number | null>(null);
-  const [summarizing, setSummarizing] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [summarizing, setSummarizing] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const limit = 10;
@@ -62,13 +62,13 @@ export default function Recordings() {
       return;
     }
 
-    setDeleting(recording.id);
+    setDeleting(recording.recording_id);
     try {
       // Delete from database first
       const { error: dbError } = await supabase
         .from('recordings')
         .delete()
-        .eq('id', recording.id);
+        .eq('recording_id', recording.recording_id);
 
       if (dbError) {
         throw new Error(`Failed to delete recording from database: ${dbError.message}`);
@@ -113,12 +113,12 @@ export default function Recordings() {
   };
 
   const handleSummarize = async (recording: RecordingType) => {
-    setSummarizing(recording.id);
+    setSummarizing(recording.recording_id);
     setError(null);
     setSuccessMessage(null);
 
     try {
-      const response = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${recording.id}/process`, {
+      const response = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${recording.recording_id}/process`, {
         method: 'POST',
       });
 
@@ -286,7 +286,7 @@ export default function Recordings() {
                 <div className="divide-y divide-gray-200 dark:divide-gray-700">
                   {recordings.map((recording) => (
                     <div
-                      key={recording.id}
+                      key={recording.recording_id}
                       className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
                       <div className="flex items-center justify-between">
@@ -322,7 +322,7 @@ export default function Recordings() {
 
                         <div className="flex items-center gap-2 ml-4">
                           <button
-                            onClick={() => navigate(`/recordings/${recording.id}`)}
+                            onClick={() => navigate(`/recordings/${recording.recording_id}`)}
                             className="inline-flex items-center gap-1 bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors dark:bg-blue-900 dark:hover:bg-blue-800 dark:text-blue-300"
                           >
                             <Play className="w-4 h-4" />
@@ -331,11 +331,11 @@ export default function Recordings() {
                           
                           <button
                             onClick={() => handleSummarize(recording)}
-                            disabled={summarizing === recording.id}
+                            disabled={summarizing === recording.recording_id}
                             className="inline-flex items-center gap-1 bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:bg-purple-900 dark:hover:bg-purple-800 dark:text-purple-300"
                           >
                             <Sparkles className="w-4 h-4" />
-                            {summarizing === recording.id ? 'Processing...' : 'Summarize'}
+                            {summarizing === recording.recording_id ? 'Processing...' : 'Summarize'}
                           </button>
                           
                           {recording.file_path && (
@@ -350,11 +350,11 @@ export default function Recordings() {
                           
                           <button
                             onClick={() => handleDelete(recording)}
-                            disabled={deleting === recording.id}
+                            disabled={deleting === recording.recording_id}
                             className="inline-flex items-center gap-1 bg-red-100 hover:bg-red-200 text-red-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:bg-red-900 dark:hover:bg-red-800 dark:text-red-300"
                           >
                             <Trash2 className="w-4 h-4" />
-                            {deleting === recording.id ? 'Deleting...' : 'Delete'}
+                            {deleting === recording.recording_id ? 'Deleting...' : 'Delete'}
                           </button>
                         </div>
                       </div>

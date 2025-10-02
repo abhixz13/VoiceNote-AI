@@ -13,7 +13,7 @@ export type JobTypeType = z.infer<typeof JobType>;
 
 // Recording schema
 export const RecordingSchema = z.object({
-  id: z.number(),
+  recording_id: z.string(), // UUID field as primary key
   title: z.string(),
   duration_seconds: z.number(),
   file_size_bytes: z.number().nullable(),
@@ -34,7 +34,7 @@ export type RecordingType = z.infer<typeof RecordingSchema>;
 // Transcription job schema
 export const TranscriptionJobSchema = z.object({
   id: z.number(),
-  recording_id: z.number(),
+  recording_id: z.string(), // UUID string to match recordings table
   status: JobStatus,
   job_type: JobType,
   result: z.string().nullable(),
@@ -81,7 +81,7 @@ export type RecordingsListType = z.infer<typeof RecordingsListSchema>;
 
 // Upload response schema
 export const UploadResponseSchema = z.object({
-  recording_id: z.number(),
+  recording_id: z.string(), // UUID string, not number
   upload_url: z.string(),
   upload_headers: z.record(z.string(), z.string()).optional(),
 });

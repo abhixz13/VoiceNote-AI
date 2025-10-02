@@ -49,7 +49,7 @@ export default function RecordingDetail() {
 
     setTranscribing(true);
     try {
-      const response = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${recording.id}/transcribe`, {
+      const response = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${recording.recording_id}/transcribe`, {
         method: 'POST',
       });
 
