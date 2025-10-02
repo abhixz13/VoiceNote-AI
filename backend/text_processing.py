@@ -4,7 +4,16 @@ import logging
 from typing import List
 from datetime import datetime
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from supabase_client import get_supabase_client
+try:
+    from .supabase_client import get_supabase_client
+    from .chunk_storage_service import ChunkStorageService
+except ImportError:
+    # Handle absolute imports when running directly
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from supabase_client import get_supabase_client
+    from chunk_storage_service import ChunkStorageService
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -77,94 +86,54 @@ def _chunk_with_langchain(
     return chunks
 
 
-async def process_transcription(recording_id: str) -> None:
+async def process_transcription(
+    recording_id: str,
+    transcription_id: str,
+    transcription_text: str
+) -> None:
     """
-    Main entry point: Download transcription, chunk it, store chunks, and trigger summarization
+    Main entry point: Process transcription text, chunk it, and store chunks
     
     Args:
         recording_id: ID of the recording to process
+        transcription_id: ID of the transcription record
+        transcription_text: The actual transcription text
     """
     try:
         supabase = get_supabase_client()
         
-        # 1. Get transcription file path from database
-        recording = supabase.table('recordings').select('*').eq('id', recording_id).execute()
-        if not recording.data:
-            logger.error(f"Recording {recording_id} not found")
-            return
+        # Get user_id from recordings table
+        recording_response = supabase.table('recordings').select('user_id').eq('recording_id', recording_id).execute()
+        if not recording_response.data:
+            raise ValueError(f"Recording {recording_id} not found")
+        user_id = recording_response.data[0]['user_id']
         
-        transcription_file_path = recording.data[0].get('transcription')
-        if not transcription_file_path:
-            logger.error(f"No transcription found for recording {recording_id}")
-            return
-        
-            # 2. Download transcription from Supabase Storage
-            transcription_content = supabase.storage.from_("Transcription").download(transcription_file_path)
-            transcription = transcription_content.decode('utf-8')
-            logger.info(f"Downloaded transcription for recording {recording_id}")
-        
-        # 3. Chunk the transcription
+        # 1. We already have the transcription_text, no need to download
+        # 2. Chunk the transcription
         chunks = preprocess_and_chunk_text(
-            transcription,
+            transcription_text,
             chunk_size_tokens=2000,
             chunk_overlap_tokens=200
         )
         logger.info(f"Generated {len(chunks)} chunks for recording {recording_id}")
         
-        # 4. Store each chunk in Supabase Storage bucket "chunks"
-        for i, chunk_text in enumerate(chunks):
-            chunk_id = f"chunk_{i+1:03d}"
-            chunk_file_path = f"{recording_id}/{chunk_id}.txt"
-            
-            # Create metadata for the chunk
-            metadata = {
-                "recording_id": recording_id,
-                "chunk_id": chunk_id,
-                "chunk_index": i,
-                "total_chunks": len(chunks),
-                "created_at": datetime.now().isoformat()
-            }
-            
-                # Upload chunk to "Chunks" bucket (note: capital C to match Supabase bucket name)
-                supabase.storage.from_("Chunks").upload(
-                    chunk_file_path,
-                    chunk_text.encode('utf-8'),
-                    {
-                        "content-type": "text/plain",
-                        "x-metadata": json.dumps(metadata)
-                    }
-                )
-                
-                logger.info(f"Stored {chunk_id} for recording {recording_id}")
+        # 3. Use ChunkStorageService to store chunks
+        chunk_storage = ChunkStorageService()
+        storage_result = await chunk_storage.store_chunks(recording_id, transcription_id, chunks, user_id)
+        logger.info(f"Stored {storage_result['chunks_stored']} chunks for recording {recording_id}")
         
-        # 5. Trigger AI Summary Service
-        await _trigger_summarization(recording_id)
+        # Log summarization status
+        if storage_result['summarization_status'] == 'success':
+            logger.info(f"Unified summary generated successfully for recording {recording_id}")
+            if storage_result.get('unified_summary'):
+                logger.info(f"Unified summary contains {len(storage_result['unified_summary'].get('chunk_summaries', []))} chunk summaries")
+        else:
+            logger.warning(f"Summarization had issues: {storage_result.get('summarization_status', 'unknown')}")
         
-        logger.info(f"Text processing completed for recording {recording_id}")
+        logger.info(f"Chunk processing completed for recording {recording_id}")
         
     except Exception as e:
         logger.error(f"Error processing transcription for {recording_id}: {str(e)}")
         raise
 
 
-async def _trigger_summarization(recording_id: str) -> None:
-    """
-    Trigger AI summarization service to process chunks
-    
-    Args:
-        recording_id: ID of the recording
-    """
-    try:
-        from ai_summary_service import AISummaryService
-        
-        logger.info(f"Triggering summarization for recording {recording_id}")
-        
-        # Call AI Summary Service
-        summary_service = AISummaryService()
-        await summary_service.process_chunks_for_recording(recording_id)
-        
-        logger.info(f"Summarization completed for recording {recording_id}")
-        
-    except Exception as e:
-        logger.error(f"Error triggering summarization for {recording_id}: {str(e)}")
-        # Don't raise - summarization failure shouldn't fail text processing

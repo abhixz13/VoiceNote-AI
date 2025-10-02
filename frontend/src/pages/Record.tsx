@@ -7,7 +7,6 @@ import RecordingControls from '@/components/RecordingControls';
 import RecordingTimer from '@/components/RecordingTimer';
 import RecordingQuality from '@/components/RecordingQuality';
 import AudioDiagnostics from '@/components/AudioDiagnostics';
-import { v4 as uuidv4 } from 'uuid';
 import { supabase, STORAGE_BUCKET, TEMP_USER_ID } from '@/lib/supabaseClient';
 
 export default function Record() {
@@ -19,6 +18,7 @@ export default function Record() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [gain, setGain] = useState(1.0);
   const [noiseReduction, setNoiseReduction] = useState(true);
+  const [savedRecordingId, setSavedRecordingId] = useState<string | null>(null); // New state to store generated recording_id
 
   const handleSave = async () => {
     if (!recordingState.audioBlob) return;
@@ -26,18 +26,17 @@ export default function Record() {
     setSaving(true);
     try {
       const recordingTitle = title.trim() || `Recording ${new Date().toLocaleString()}`;
-      const recordingId = uuidv4();
       
-      // Create recording metadata
-      const metadata = {
-        notes: notes.trim(),
-        gain,
-        noiseReduction,
-        recordingId,
-      };
+      // Removed metadata as a column and client-side UUID generation
+      // const metadata = {
+      //   notes: notes.trim(),
+      //   gain,
+      //   noiseReduction,
+      // };
 
       // Upload audio file to Supabase Storage first
-      const objectPath = `${TEMP_USER_ID}/${recordingId}.webm`; // Path within the bucket
+      // Using timestamp for objectPath instead of a client-generated UUID
+      const objectPath = `${TEMP_USER_ID}/${Date.now()}.webm`;
       const { error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKET)
         .upload(objectPath, recordingState.audioBlob, {
@@ -54,19 +53,22 @@ export default function Record() {
         .from(STORAGE_BUCKET)
         .getPublicUrl(objectPath);
 
-      // Save directly to Supabase database
-      const { error: dbError } = await supabase
+      // Save to Supabase database and capture the generated recording_id
+      const { data: insertData, error: dbError } = await supabase
         .from('recordings')
         .insert({
           title: recordingTitle,
           duration_seconds: recordingState.duration,
           file_size_bytes: recordingState.audioBlob.size,
-          file_path: `${STORAGE_BUCKET}/${objectPath}`, // Store full path including bucket
+          file_path: `${STORAGE_BUCKET}/${objectPath}`,
           file_url: urlData.publicUrl,
-          metadata: JSON.stringify(metadata),
+          // metadata: JSON.stringify(metadata), // Removed metadata
           status: 'recorded',
           user_id: TEMP_USER_ID,
-        });
+          // created_at is handled by Supabase default now()
+        })
+        .select('recording_id') // Capture the Supabase-generated recording_id
+        .single();
 
       if (dbError) {
         // If database save fails, try to clean up the uploaded file
@@ -74,8 +76,9 @@ export default function Record() {
         throw new Error(`Failed to save recording to database: ${dbError.message}`);
       }
 
-      console.log('Recording saved successfully to database');
-      
+      console.log('Recording saved successfully to database with ID:', insertData.recording_id);
+      setSavedRecordingId(insertData.recording_id); // Store the generated recording_id
+
       // Reset form and navigate to recordings list
       recordingControls.clearRecording();
       setTitle('');

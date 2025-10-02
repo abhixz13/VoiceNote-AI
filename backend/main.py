@@ -13,8 +13,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from transcription_service import TranscriptionService
-from ai_summary_service import AISummaryService
+try:
+    from .transcription_service import TranscriptionService
+    from .ai_summary_service import AISummaryService
+except ImportError:
+    # Handle absolute imports when running directly
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from transcription_service import TranscriptionService
+    from ai_summary_service import AISummaryService
 
 # Load environment variables
 load_dotenv()
@@ -29,8 +37,8 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(
     title="VoiceNote AI Backend",
-    description="Backend API for audio transcription and summarization",
-    version="1.0.0"
+    description="API for VoiceNote AI application, handling transcription, summarization, and note generation.",
+    version="0.1.0",
 )
 
 # Configure CORS
@@ -78,7 +86,8 @@ class SummaryRequest(BaseModel):
 class SummaryResponse(BaseModel):
     status: str
     recording_id: str
-    summaries: Optional[Dict] = None
+    unified_summary: Optional[Dict] = None
+    message: Optional[str] = None
     error: Optional[str] = None
     timestamp: str
 
@@ -130,7 +139,7 @@ async def transcribe_recording(recording_id: str):
             status=result['status'],
             recording_id=result['recording_id'],
             transcription_file_path=result.get('transcription_file_path'),
-            timestamp=result['timestamp']
+            timestamp=result.get('timestamp', datetime.now().isoformat())
         )
         
     except Exception as e:
@@ -142,7 +151,7 @@ async def transcribe_recording(recording_id: str):
 @app.post("/api/recordings/{recording_id}/summarize", response_model=SummaryResponse)
 async def summarize_recording(recording_id: str):
     """
-    Generate summaries for a transcribed recording
+    Generate summaries for a transcribed recording (or transcribe first if needed)
     
     Args:
         recording_id: ID of the recording to summarize
@@ -153,17 +162,19 @@ async def summarize_recording(recording_id: str):
     try:
         logger.info(f"Starting summarization for recording {recording_id}")
         
-        service = get_summary_service()
-        result = await service.generate_summaries_for_recording(recording_id)
+        # Use the new summarize_recording method from TranscriptionService
+        service = get_transcription_service()
+        result = await service.summarize_recording(recording_id)
         
         if result['status'] == 'error':
-            raise HTTPException(status_code=500, detail=result['error'])
+            raise HTTPException(status_code=500, detail=result['message'])
         
         return SummaryResponse(
             status=result['status'],
             recording_id=result['recording_id'],
-            summaries=result.get('summaries'),
-            timestamp=result['timestamp']
+            unified_summary=result.get('unified_summary'),
+            message=result['message'],
+            timestamp=datetime.now().isoformat()
         )
         
     except Exception as e:
@@ -186,24 +197,19 @@ async def process_recording(recording_id: str, background_tasks: BackgroundTasks
     try:
         logger.info(f"Starting full processing for recording {recording_id}")
         
-        # Step 1: Transcribe
-        transcription_svc = get_transcription_service()
-        transcription_result = await transcription_svc.transcribe_recording(recording_id)
-        if transcription_result['status'] == 'error':
-            raise HTTPException(status_code=500, detail=transcription_result['error'])
-        
-        # Step 2: Summarize
-        summary_svc = get_summary_service()
-        summary_result = await summary_svc.generate_summaries_for_recording(recording_id)
-        if summary_result['status'] == 'error':
-            raise HTTPException(status_code=500, detail=summary_result['error'])
+        # Use the summarize_recording method which handles the full pipeline
+        service = get_transcription_service()
+        result = await service.summarize_recording(recording_id)
+        if result['status'] == 'error':
+            raise HTTPException(status_code=500, detail=result['message'])
         
         return {
-            "status": "success",
-            "recording_id": recording_id,
-            "message": "Recording transcribed and summarized successfully",
-            "transcription_file_path": transcription_result.get('transcription_file_path'),
-            "summaries": summary_result.get('summaries'),
+            "status": result['status'],
+            "recording_id": result['recording_id'],
+            "message": result['message'],
+            "unified_summary": result.get('unified_summary'),
+            "summary_id": result.get('summary_id'),
+            "summary_path": result.get('summary_path'),
             "timestamp": datetime.now().isoformat()
         }
         
