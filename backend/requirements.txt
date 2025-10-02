@@ -1,15 +1,12 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 
-# Supabase client with specific compatible versions
+# Supabase client with compatible versions (let pip resolve dependencies)
 supabase==2.0.3
-gotrue==1.3.1
-storage3==0.6.1
 
-# HTTP client - compatible with supabase-py 2.0.3 (requires httpx<0.25.0)
-httpx==0.24.1
-httpcore==0.18.0
-websockets==12.0
+# Let pip resolve compatible versions for HTTP dependencies
+# (supabase 2.0.3 will automatically pull compatible httpx, httpcore, etc.)
+websockets>=12.0,<13.0
 
 # OpenAI for transcription and summarization
 openai==1.3.0
