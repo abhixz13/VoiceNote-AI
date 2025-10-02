@@ -8,12 +8,22 @@ yarn-error.log*
 dist/
 build/
 
-# Environment variables
+# Environment variables and secrets
 .env
+.env.*
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+backend/.env
+frontend/.env
+**/secrets.json
+**/config.json
+**/*secret*
+**/*key*
+**/*token*
+**/*password*
+**/*credential*
 
 # IDE and editor files
 .vscode/

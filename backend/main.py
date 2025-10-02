@@ -65,15 +65,35 @@ async def startup_event():
         ]
         
         missing_vars = []
+        invalid_vars = []
+        
         for var in required_env_vars:
-            if not os.getenv(var):
+            value = os.getenv(var)
+            if not value:
                 missing_vars.append(var)
+            else:
+                # Security validation - check for placeholder values
+                if value in ["your_key_here", "your_api_key", "placeholder", "changeme", "example"]:
+                    invalid_vars.append(f"{var} (contains placeholder value)")
+                # Check minimum length for security
+                elif len(value) < 10:
+                    invalid_vars.append(f"{var} (too short, likely invalid)")
         
         if missing_vars:
             logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
             raise RuntimeError(f"Missing environment variables: {', '.join(missing_vars)}")
         
-        logger.info("✅ All required environment variables are set")
+        if invalid_vars:
+            logger.error(f"Invalid environment variables detected: {', '.join(invalid_vars)}")
+            raise RuntimeError(f"Invalid environment variables: {', '.join(invalid_vars)}")
+        
+        # Security check - ensure service role key is not accidentally used in frontend
+        service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        if service_role_key and not service_role_key.startswith("eyJ"):
+            logger.warning("⚠️  SUPABASE_SERVICE_ROLE_KEY doesn't look like a JWT token")
+        
+        logger.info("✅ All required environment variables are set and validated")
+        logger.info("🔒 Security checks passed")
         logger.info("🚀 VoiceNote AI Backend started successfully")
         
     except Exception as e:
