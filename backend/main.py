@@ -5,6 +5,7 @@ FastAPI application for audio transcription and summarization
 """
 
 import os
+import sys
 import logging
 from typing import Dict, Optional
 from datetime import datetime
@@ -50,7 +51,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize services (deferred - will be initialized on first use)
+# Startup event to validate environment
+@app.on_event("startup")
+async def startup_event():
+    """Validate environment variables and dependencies on startup"""
+    try:
+        # Check required environment variables
+        required_env_vars = [
+            "OPENAI_API_KEY",
+            "SUPABASE_URL", 
+            "SUPABASE_ANON_KEY",
+            "SUPABASE_SERVICE_ROLE_KEY"
+        ]
+        
+        missing_vars = []
+        for var in required_env_vars:
+            if not os.getenv(var):
+                missing_vars.append(var)
+        
+        if missing_vars:
+            logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
+            raise RuntimeError(f"Missing environment variables: {', '.join(missing_vars)}")
+        
+        logger.info("✅ All required environment variables are set")
+        logger.info("🚀 VoiceNote AI Backend started successfully")
+        
+    except Exception as e:
+        logger.error(f"❌ Startup validation failed: {str(e)}")
+        raise
+
+# Initialize services (lazy initialization to avoid startup errors)
 transcription_service = None
 summary_service = None
 
@@ -58,14 +88,22 @@ def get_transcription_service():
     """Get or initialize transcription service"""
     global transcription_service
     if transcription_service is None:
-        transcription_service = TranscriptionService()
+        try:
+            transcription_service = TranscriptionService()
+        except Exception as e:
+            logger.error(f"Failed to initialize TranscriptionService: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Service initialization failed: {str(e)}")
     return transcription_service
 
 def get_summary_service():
     """Get or initialize summary service"""
     global summary_service
     if summary_service is None:
-        summary_service = AISummaryService()
+        try:
+            summary_service = AISummaryService()
+        except Exception as e:
+            logger.error(f"Failed to initialize AISummaryService: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Service initialization failed: {str(e)}")
     return summary_service
 
 
@@ -106,12 +144,28 @@ async def root():
 @app.get("/health")
 async def health():
     """Health check endpoint for Railway"""
-    return {
-        "status": "healthy",
-        "service": "VoiceNote AI Backend",
-        "version": "1.0.0",
-        "timestamp": datetime.now().isoformat()
-    }
+    try:
+        # Basic health check without initializing services
+        return {
+            "status": "healthy",
+            "service": "VoiceNote AI Backend",
+            "version": "1.0.0",
+            "timestamp": datetime.now().isoformat(),
+            "environment": {
+                "python_version": sys.version,
+                "has_openai_key": bool(os.getenv("OPENAI_API_KEY")),
+                "has_supabase_url": bool(os.getenv("SUPABASE_URL")),
+                "has_supabase_keys": bool(os.getenv("SUPABASE_ANON_KEY") and os.getenv("SUPABASE_SERVICE_ROLE_KEY"))
+            }
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "service": "VoiceNote AI Backend",
+            "version": "1.0.0",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }
 
 
 # Transcription endpoint
