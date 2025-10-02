@@ -22,7 +22,7 @@ export default function RecordingDetail() {
     setError(null);
     
     try {
-      const response = await fetch(`/api/recordings/${id}`);
+      const response = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${id}`);
       
       if (!response.ok) {
         if (response.status === 404) {
