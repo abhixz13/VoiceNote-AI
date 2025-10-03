@@ -241,10 +241,17 @@ class TranscriptionService:
             #     update_data['metadata'] = json.dumps({'error': error_message})
             
             response = self.supabase.table('recordings').update(update_data).eq('recording_id', recording_id).execute()
-            self.logger.info(f"Updated recording {recording_id} status to {status}")
+            
+            # Check if the update actually affected any rows
+            if response.data and len(response.data) > 0:
+                self.logger.info(f"Successfully updated recording {recording_id} status to {status}")
+            else:
+                self.logger.error(f"Status update for recording {recording_id} affected 0 rows - recording may not exist")
+                raise Exception(f"Failed to update status for recording {recording_id} - no rows affected")
             
         except Exception as e:
             self.logger.error(f"Error updating recording status {recording_id}: {str(e)}")
+            raise  # Re-raise so caller knows the status update failed
     
     async def _trigger_text_processing(self, recording_id: str, transcription_id: str, transcription_text: str) -> None:
         """
