@@ -295,6 +295,36 @@ async def process_recording(recording_id: str, background_tasks: BackgroundTasks
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Get individual recording endpoint
+@app.get("/api/recordings/{recording_id}")
+async def get_recording(recording_id: str):
+    """
+    Get a single recording by ID
+    
+    Args:
+        recording_id: ID of the recording to fetch
+        
+    Returns:
+        Recording data or 404 if not found
+    """
+    try:
+        logger.info(f"Fetching recording {recording_id}")
+        
+        service = get_transcription_service()
+        recording_info = await service._get_recording_info(recording_id)
+        
+        if not recording_info:
+            raise HTTPException(status_code=404, detail=f"Recording {recording_id} not found")
+        
+        return recording_info
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching recording {recording_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Get unified summary endpoint
 @app.get("/api/recordings/{recording_id}/summary")
 async def get_unified_summary(recording_id: str):

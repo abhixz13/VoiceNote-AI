@@ -482,14 +482,14 @@ Focus on creating a cohesive narrative that represents the complete recording, n
             }
             
             try:
-                response = self.supabase.table('summary').insert(summary_metadata).execute()
+                response = self.supabase.table('summaries').insert(summary_metadata).execute()
                 if not response.data:
                     self.logger.warning(f"Failed to insert summary metadata for {summary_id}")
                 else:
                     self.logger.info(f"Updated summary table for {summary_id}")
             except Exception as db_error:
                 # Check if summary already exists
-                existing_response = self.supabase.table('summary').select('summary_id').eq('summary_id', summary_id).execute()
+                existing_response = self.supabase.table('summaries').select('summary_id').eq('summary_id', summary_id).execute()
                 if existing_response.data:
                     self.logger.info(f"Summary metadata already exists for {summary_id}")
                 else:
