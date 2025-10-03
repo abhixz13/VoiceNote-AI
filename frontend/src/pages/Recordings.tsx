@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { Play, Trash2, Clock, FileAudio, ChevronLeft, ChevronRight, Plus, Download, Sparkles } from 'lucide-react';
+import { Play, Trash2, Clock, FileAudio, ChevronLeft, ChevronRight, Plus, Download, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { RecordingType } from '../types';
 import { supabase, STORAGE_BUCKET } from '../lib/supabaseClient';
 
@@ -15,6 +15,8 @@ export default function Recordings() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [summarizing, setSummarizing] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [expandedRecordings, setExpandedRecordings] = useState<Set<string>>(new Set());
+  const [activeSummaryTab, setActiveSummaryTab] = useState<{[key: string]: 'transcript' | 'executive' | 'keypoints' | 'detailed'}>({});
 
   const limit = 10;
   const RAILWAY_BACKEND_URL = 'https://voicenote-ai-backend.up.railway.app';
@@ -129,16 +131,24 @@ export default function Recordings() {
       
       // Handle different response types
       if (result.already_existed) {
-        setSuccessMessage('Summaries already exist for this recording. Click "View Summary" to see them.');
+        setSuccessMessage('Summaries already exist for this recording.');
       } else {
-        setSuccessMessage('Summary generation completed successfully! Click "View Summary" to see results.');
+        setSuccessMessage('Summary generation completed successfully!');
       }
       
-      // Refresh recordings to get updated status and show "View Summary" button
+      // Refresh recordings to get updated status and content
       await fetchRecordings(currentPage);
       
-      // Clear success message after 7 seconds (longer for better UX)
-      setTimeout(() => setSuccessMessage(null), 7000);
+      // Auto-expand the recording to show the summary
+      const newExpanded = new Set(expandedRecordings);
+      newExpanded.add(recording.recording_id);
+      setExpandedRecordings(newExpanded);
+      
+      // Set default tab to transcript
+      setActiveSummaryTab(prev => ({ ...prev, [recording.recording_id]: 'transcript' }));
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate summary');
     } finally {
@@ -215,6 +225,28 @@ export default function Recordings() {
     }
   };
 
+  const toggleRecordingExpansion = (recordingId: string) => {
+    const newExpanded = new Set(expandedRecordings);
+    if (newExpanded.has(recordingId)) {
+      newExpanded.delete(recordingId);
+    } else {
+      newExpanded.add(recordingId);
+      // Set default tab to transcript if not already set
+      if (!activeSummaryTab[recordingId]) {
+        setActiveSummaryTab(prev => ({ ...prev, [recordingId]: 'transcript' }));
+      }
+    }
+    setExpandedRecordings(newExpanded);
+  };
+
+  const setSummaryTab = (recordingId: string, tab: 'transcript' | 'executive' | 'keypoints' | 'detailed') => {
+    setActiveSummaryTab(prev => ({ ...prev, [recordingId]: tab }));
+  };
+
+  const hasSummaryContent = (recording: RecordingType) => {
+    return recording.transcription || recording.summary_short || recording.summary_medium || recording.summary_detailed;
+  };
+
   if (loading && recordings.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-blue-900">
@@ -234,22 +266,13 @@ export default function Recordings() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-blue-900">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              My Recordings
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              {total} recording{total !== 1 ? 's' : ''} total
-            </p>
-          </div>
-          <button
-            onClick={() => navigate('/record')}
-            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            New Recording
-          </button>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            My Recordings
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            {total} recording{total !== 1 ? 's' : ''} total
+          </p>
         </div>
 
         {/* Error Display */}
@@ -289,92 +312,196 @@ export default function Recordings() {
               {/* Recordings List */}
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
                 <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {recordings.map((recording) => (
-                    <div
-                      key={recording.recording_id}
-                      className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-lg font-medium text-gray-900 dark:text-white truncate">
-                              {recording.title}
-                            </h3>
-                            <span className={getStatusBadge(recording.status)}>
-                              {getStatusText(recording.status)}
-                            </span>
-                          </div>
-                          
-                          <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                            <div className="flex items-center gap-1">
-                              <Clock className="w-4 h-4" />
-                              {formatDuration(recording.duration_seconds)}
+                  {recordings.map((recording) => {
+                    const isExpanded = expandedRecordings.has(recording.recording_id);
+                    const currentTab = activeSummaryTab[recording.recording_id] || 'transcript';
+                    const hasContent = hasSummaryContent(recording);
+                    
+                    return (
+                      <div key={recording.recording_id} className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                        <div className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-3 mb-2">
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-white truncate">
+                                  {recording.title}
+                                </h3>
+                                <span className={getStatusBadge(recording.status)}>
+                                  {getStatusText(recording.status)}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                                <div className="flex items-center gap-1">
+                                  <Clock className="w-4 h-4" />
+                                  {formatDuration(recording.duration_seconds)}
+                                </div>
+                                <span>{formatDate(recording.created_at)}</span>
+                                {recording.file_size_bytes && (
+                                  <span>
+                                    {(recording.file_size_bytes / 1024 / 1024).toFixed(1)} MB
+                                  </span>
+                                )}
+                              </div>
+
+                              {recording.summary_short && !isExpanded && (
+                                <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 line-clamp-2">
+                                  {recording.summary_short}
+                                </p>
+                              )}
                             </div>
-                            <span>{formatDate(recording.created_at)}</span>
-                            {recording.file_size_bytes && (
-                              <span>
-                                {(recording.file_size_bytes / 1024 / 1024).toFixed(1)} MB
-                              </span>
-                            )}
+
+                            <div className="flex items-center gap-2 ml-4">
+                              <button
+                                onClick={() => navigate(`/recordings/${recording.recording_id}`)}
+                                className="inline-flex items-center gap-1 bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors dark:bg-blue-900 dark:hover:bg-blue-800 dark:text-blue-300"
+                              >
+                                <Play className="w-4 h-4" />
+                                View
+                              </button>
+                              
+                              {hasContent && (
+                                <button
+                                  onClick={() => toggleRecordingExpansion(recording.recording_id)}
+                                  className="inline-flex items-center gap-1 bg-green-100 hover:bg-green-200 text-green-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors dark:bg-green-900 dark:hover:bg-green-800 dark:text-green-300"
+                                >
+                                  {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                  {isExpanded ? 'Hide' : 'Show'} Summary
+                                </button>
+                              )}
+                              
+                              {!hasContent && (
+                                <button
+                                  onClick={() => handleSummarize(recording)}
+                                  disabled={summarizing === recording.recording_id}
+                                  className="inline-flex items-center gap-1 bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:bg-purple-900 dark:hover:bg-purple-800 dark:text-purple-300"
+                                >
+                                  <Sparkles className="w-4 h-4" />
+                                  {summarizing === recording.recording_id ? 'Processing...' : 'Summarize'}
+                                </button>
+                              )}
+                              
+                              {recording.file_path && (
+                                <button
+                                  onClick={() => handleDownload(recording)}
+                                  className="inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-300"
+                                >
+                                  <Download className="w-4 h-4" />
+                                  Download
+                                </button>
+                              )}
+                              
+                              <button
+                                onClick={() => handleDelete(recording)}
+                                disabled={deleting === recording.recording_id}
+                                className="inline-flex items-center gap-1 bg-red-100 hover:bg-red-200 text-red-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:bg-red-900 dark:hover:bg-red-800 dark:text-red-300"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                {deleting === recording.recording_id ? 'Deleting...' : 'Delete'}
+                              </button>
+                            </div>
                           </div>
-
-                          {recording.summary_short && (
-                            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 line-clamp-2">
-                              {recording.summary_short}
-                            </p>
-                          )}
                         </div>
 
-                        <div className="flex items-center gap-2 ml-4">
-                          <button
-                            onClick={() => navigate(`/recordings/${recording.recording_id}`)}
-                            className="inline-flex items-center gap-1 bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors dark:bg-blue-900 dark:hover:bg-blue-800 dark:text-blue-300"
-                          >
-                            <Play className="w-4 h-4" />
-                            View
-                          </button>
-                          
-                          {recording.status === 'summarized' ? (
-                            <button
-                              onClick={() => navigate(`/recordings/${recording.recording_id}`)}
-                              className="inline-flex items-center gap-1 bg-green-100 hover:bg-green-200 text-green-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors dark:bg-green-900 dark:hover:bg-green-800 dark:text-green-300"
-                            >
-                              <Sparkles className="w-4 h-4" />
-                              View Summary
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleSummarize(recording)}
-                              disabled={summarizing === recording.recording_id}
-                              className="inline-flex items-center gap-1 bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:bg-purple-900 dark:hover:bg-purple-800 dark:text-purple-300"
-                            >
-                              <Sparkles className="w-4 h-4" />
-                              {summarizing === recording.recording_id ? 'Processing...' : 'Summarize'}
-                            </button>
-                          )}
-                          
-                          {recording.file_path && (
-                            <button
-                              onClick={() => handleDownload(recording)}
-                              className="inline-flex items-center gap-1 bg-green-100 hover:bg-green-200 text-green-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors dark:bg-green-900 dark:hover:bg-green-800 dark:text-green-300"
-                            >
-                              <Download className="w-4 h-4" />
-                              Download
-                            </button>
-                          )}
-                          
-                          <button
-                            onClick={() => handleDelete(recording)}
-                            disabled={deleting === recording.recording_id}
-                            className="inline-flex items-center gap-1 bg-red-100 hover:bg-red-200 text-red-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:bg-red-900 dark:hover:bg-red-800 dark:text-red-300"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            {deleting === recording.recording_id ? 'Deleting...' : 'Delete'}
-                          </button>
-                        </div>
+                        {/* Expandable Summary Section */}
+                        {isExpanded && hasContent && (
+                          <div className="px-6 pb-6 bg-gray-50 dark:bg-gray-800">
+                            {/* Tab Navigation */}
+                            <div className="border-b border-gray-200 dark:border-gray-600 mb-4">
+                              <nav className="flex space-x-8">
+                                {[
+                                  { key: 'transcript', label: 'Transcript', available: !!recording.transcription },
+                                  { key: 'executive', label: 'Executive Summary', available: !!recording.summary_short },
+                                  { key: 'keypoints', label: 'Key Points', available: !!recording.summary_medium },
+                                  { key: 'detailed', label: 'Detailed Summary', available: !!recording.summary_detailed },
+                                ].map((tab) => (
+                                  <button
+                                    key={tab.key}
+                                    onClick={() => setSummaryTab(recording.recording_id, tab.key as any)}
+                                    disabled={!tab.available}
+                                    className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                      currentTab === tab.key && tab.available
+                                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                                    }`}
+                                  >
+                                    {tab.label}
+                                  </button>
+                                ))}
+                              </nav>
+                            </div>
+
+                            {/* Tab Content */}
+                            <div className="bg-white dark:bg-gray-700 rounded-lg p-4">
+                              {currentTab === 'transcript' && recording.transcription && (
+                                <div>
+                                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Transcription</h4>
+                                  <div className="prose prose-sm max-w-none">
+                                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                                      {recording.transcription}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+
+                              {currentTab === 'executive' && recording.summary_short && (
+                                <div>
+                                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Executive Summary</h4>
+                                  <div className="prose prose-sm max-w-none">
+                                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                                      {recording.summary_short}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+
+                              {currentTab === 'keypoints' && recording.summary_medium && (
+                                <div>
+                                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Key Points</h4>
+                                  <div className="prose prose-sm max-w-none">
+                                    <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                                      {recording.summary_medium}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {currentTab === 'detailed' && recording.summary_detailed && (
+                                <div>
+                                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Detailed Summary</h4>
+                                  <div className="prose prose-sm max-w-none">
+                                    <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                                      {recording.summary_detailed}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Show message if no content for current tab */}
+                              {((currentTab === 'transcript' && !recording.transcription) ||
+                                (currentTab === 'executive' && !recording.summary_short) ||
+                                (currentTab === 'keypoints' && !recording.summary_medium) ||
+                                (currentTab === 'detailed' && !recording.summary_detailed)) && (
+                                <div className="text-center py-8">
+                                  <p className="text-gray-500 dark:text-gray-400 mb-4">
+                                    This content is not available yet.
+                                  </p>
+                                  <button
+                                    onClick={() => handleSummarize(recording)}
+                                    disabled={summarizing === recording.recording_id}
+                                    className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                                  >
+                                    <Sparkles className="w-4 h-4" />
+                                    {summarizing === recording.recording_id ? 'Processing...' : 'Generate Summary'}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
