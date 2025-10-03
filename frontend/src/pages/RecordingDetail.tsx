@@ -9,7 +9,7 @@ export default function RecordingDetail() {
   const [recording, setRecording] = useState<RecordingType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'transcript' | 'short' | 'medium' | 'detailed'>('transcript');
+  const [activeTab, setActiveTab] = useState<'short' | 'medium' | 'detailed'>('short');
   const [transcribing, setTranscribing] = useState(false);
   const [unifiedSummary, setUnifiedSummary] = useState<any>(null);
 
@@ -65,27 +65,6 @@ export default function RecordingDetail() {
     fetchRecording();
   }, [id]);
 
-  const handleTranscribe = async () => {
-    if (!recording) return;
-
-    setTranscribing(true);
-    try {
-      const response = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${recording.recording_id}/transcribe`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to start transcription');
-      }
-
-      // Refresh recording data
-      await fetchRecording();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start transcription');
-    } finally {
-      setTranscribing(false);
-    }
-  };
 
   const handleSummarize = async () => {
     if (!recording) return;
@@ -244,14 +223,6 @@ export default function RecordingDetail() {
                 <Download className="w-4 h-4" />
                 Download
               </button>
-              <button
-                onClick={handleTranscribe}
-                disabled={transcribing}
-                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-              >
-                <RefreshCw className={`w-4 h-4 ${transcribing ? 'animate-spin' : ''}`} />
-                {transcribing ? 'Processing...' : 'Re-transcribe'}
-              </button>
             </div>
 
             {/* Metadata */}
@@ -267,19 +238,13 @@ export default function RecordingDetail() {
             )}
           </div>
 
-          {/* Tabbed Content: Transcription & Summaries */}
-          {(recording.transcription || unifiedSummary) && (
+          {/* Tabbed Content: Summaries */}
+          {unifiedSummary && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
               {/* Tab Navigation */}
               <div className="border-b border-gray-200 dark:border-gray-700">
                 <nav className="flex">
                   {[
-                    { 
-                      key: 'transcript', 
-                      label: 'Transcript', 
-                      description: 'Full text transcription',
-                      available: !!recording.transcription 
-                    },
                     { 
                       key: 'short', 
                       label: 'Short', 
@@ -288,8 +253,8 @@ export default function RecordingDetail() {
                     },
                     { 
                       key: 'medium', 
-                      label: 'Medium', 
-                      description: 'Balanced detail',
+                      label: 'Key Points', 
+                      description: 'Key insights and highlights',
                       available: !!(recording.summary_medium || unifiedSummary?.unified_summary?.consolidated_summary?.key_points)
                     },
                     { 
@@ -329,36 +294,6 @@ export default function RecordingDetail() {
 
               {/* Tab Content */}
               <div className="p-8">
-                {/* Transcript Content */}
-                {activeTab === 'transcript' && (
-                  <div>
-                    {recording.transcription ? (
-                      <div className="prose prose-gray dark:prose-invert max-w-none">
-                        <div className="p-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                          <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                            {recording.transcription}
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center py-12">
-                        <FileAudio className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-500 dark:text-gray-400 mb-4">
-                          Transcription not available
-                        </p>
-                        <button
-                          onClick={handleTranscribe}
-                          disabled={transcribing}
-                          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                        >
-                          <RefreshCw className={`w-4 h-4 ${transcribing ? 'animate-spin' : ''}`} />
-                          {transcribing ? 'Generating...' : 'Generate Transcript'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 {/* Short Summary Content */}
                 {activeTab === 'short' && (
                   <div>
@@ -473,26 +408,6 @@ export default function RecordingDetail() {
             </div>
           )}
 
-          {/* No transcription yet */}
-          {!recording.transcription && recording.status === 'recorded' && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 text-center">
-              <FileAudio className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                No transcription yet
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Start transcription to generate text and AI summaries
-              </p>
-              <button
-                onClick={handleTranscribe}
-                disabled={transcribing}
-                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition-colors"
-              >
-                <RefreshCw className={`w-5 h-5 ${transcribing ? 'animate-spin' : ''}`} />
-                {transcribing ? 'Starting Transcription...' : 'Start Transcription'}
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </div>
