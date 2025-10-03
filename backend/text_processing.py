@@ -103,7 +103,7 @@ async def process_transcription(
         supabase = get_supabase_client()
         
         # Get user_id from recordings table
-        recording_response = supabase.table('recordings').select('user_id').eq('recording_id', recording_id).execute()
+        recording_response = supabase.table('recordings').select('user_id').eq('id', recording_id).execute()
         if not recording_response.data:
             raise ValueError(f"Recording {recording_id} not found")
         user_id = recording_response.data[0]['user_id']

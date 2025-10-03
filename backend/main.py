@@ -295,41 +295,6 @@ async def process_recording(recording_id: str, background_tasks: BackgroundTasks
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Get single recording endpoint
-@app.get("/api/recordings/{recording_id}")
-async def get_recording(recording_id: str):
-    """
-    Get a single recording by ID
-    
-    Args:
-        recording_id: ID of the recording to fetch
-        
-    Returns:
-        Recording data or 404 if not found
-    """
-    try:
-        logger.info(f"Fetching recording {recording_id}")
-        
-        service = get_transcription_service()
-        supabase = service.supabase
-        
-        # Get recording from recordings table
-        recording_response = supabase.table('recordings').select('*').eq('recording_id', recording_id).execute()
-        
-        if not recording_response.data:
-            raise HTTPException(status_code=404, detail="Recording not found")
-        
-        recording = recording_response.data[0]
-        
-        return recording
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching recording {recording_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch recording: {str(e)}")
-
-
 # Get unified summary endpoint
 @app.get("/api/recordings/{recording_id}/summary")
 async def get_unified_summary(recording_id: str):
@@ -479,7 +444,7 @@ async def delete_recording(recording_id: str):
             storage_errors.append(f"Main audio file: {str(e)}")
         
         # Step 5: Finally delete the recording record
-        recording_result = supabase.table('recordings').delete().eq('recording_id', recording_id).execute()
+        recording_result = supabase.table('recordings').delete().eq('id', recording_id).execute()
         
         if not recording_result.data:
             raise HTTPException(status_code=500, detail="Failed to delete recording from database")
