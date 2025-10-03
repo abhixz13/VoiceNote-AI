@@ -346,14 +346,18 @@ class TranscriptionService:
                 self.logger.info(f"Triggering text processing for existing transcription {transcription_id}")
                 await self._trigger_text_processing(recording_id, transcription_id, transcription_text)
                 
-                # Update recording status to 'summarized' after successful processing
+                # Update recording status to 'summarized' immediately after successful processing
                 await self._update_recording_status(recording_id, 'summarized')
                 self.logger.info(f"Updated recording {recording_id} status to 'summarized'")
                 
-                # Get the generated summary from summaries table
-                existing_summary = await self._get_existing_summary(recording_id)
+                # Try to get the generated summary from summaries table (don't fail if this doesn't work)
+                existing_summary = None
+                try:
+                    existing_summary = await self._get_existing_summary(recording_id)
+                except Exception as summary_error:
+                    self.logger.warning(f"Could not retrieve summary for {recording_id}: {summary_error}")
                 
-                # Return success status with unified summary
+                # Return success status with unified summary (if available)
                 return {
                     'status': 'success',
                     'message': 'Summary generation completed successfully',
