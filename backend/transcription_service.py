@@ -344,21 +344,23 @@ class TranscriptionService:
                 
                 # Trigger text processing (chunking + summarization)
                 self.logger.info(f"Triggering text processing for existing transcription {transcription_id}")
-                processing_result = await self._trigger_text_processing(recording_id, transcription_id, transcription_text)
+                await self._trigger_text_processing(recording_id, transcription_id, transcription_text)
                 
                 # Update recording status to 'summarized' after successful processing
-                if processing_result and processing_result.get('status') == 'success':
-                    await self._update_recording_status(recording_id, 'summarized')
-                    self.logger.info(f"Updated recording {recording_id} status to 'summarized'")
+                await self._update_recording_status(recording_id, 'summarized')
+                self.logger.info(f"Updated recording {recording_id} status to 'summarized'")
+                
+                # Get the generated summary from summaries table
+                existing_summary = await self._get_existing_summary(recording_id)
                 
                 # Return success status with unified summary
                 return {
                     'status': 'success',
                     'message': 'Summary generation completed successfully',
                     'recording_id': recording_id,
-                    'unified_summary': processing_result.get('unified_summary'),
-                    'summary_id': processing_result.get('summary_id'),
-                    'summary_path': processing_result.get('summary_path')
+                    'unified_summary': existing_summary.get('unified_summary') if existing_summary else None,
+                    'summary_id': existing_summary.get('summary_id') if existing_summary else None,
+                    'summary_path': existing_summary.get('summary_path') if existing_summary else None
                 }
             
         except Exception as e:
