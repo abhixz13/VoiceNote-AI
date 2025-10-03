@@ -265,7 +265,7 @@ class TranscriptionService:
             
         except Exception as e:
             self.logger.error(f"Error triggering text processing for {recording_id}: {str(e)}")
-            # Don't raise - processing failure shouldn't fail the transcription
+            raise  # Re-raise the exception so caller knows processing failed
     
     async def summarize_recording(self, recording_id: str) -> Dict[str, Any]:
         """
