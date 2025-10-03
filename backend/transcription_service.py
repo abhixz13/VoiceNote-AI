@@ -213,14 +213,14 @@ class TranscriptionService:
                 else:
                     raise db_error
             
-            # 3. Update the recordings table status
+            # 3. Update the recordings table status to 'processing' (will be set to 'summarized' after processing)
             update_data = {
-                'status': 'transcribed',
+                'status': 'processing',
                 'updated_at': datetime.now().isoformat()
             }
             
             self.supabase.table('recordings').update(update_data).eq('recording_id', recording_id).execute()
-            self.logger.info(f"Updated recording {recording_id} status to 'transcribed'")
+            self.logger.info(f"Updated recording {recording_id} status to 'processing'")
             
             return inserted_transcription_id  # Return the generated transcription_id
             

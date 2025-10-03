@@ -35,7 +35,7 @@ export default function RecordingDetail() {
       const data: RecordingType = await response.json();
       setRecording(data);
 
-      // If recording is summarized, fetch the unified summary
+      // If recording is summarized, automatically fetch the unified summary
       if (data.status === 'summarized') {
         await fetchUnifiedSummary(data.recording_id);
       }
@@ -146,7 +146,7 @@ export default function RecordingDetail() {
         return `${baseClasses} bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300`;
       case 'processing':
         return `${baseClasses} bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300`;
-      case 'transcribed':
+      case 'summarized':
         return `${baseClasses} bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300`;
       case 'error':
         return `${baseClasses} bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300`;

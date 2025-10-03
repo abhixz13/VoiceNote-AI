@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { Play, Trash2, Clock, FileAudio, ChevronLeft, ChevronRight, Plus, Download, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
+import { Play, Trash2, Clock, FileAudio, ChevronLeft, ChevronRight, Plus, Download, Sparkles } from 'lucide-react';
 import { RecordingType } from '../types';
 import { supabase, STORAGE_BUCKET } from '../lib/supabaseClient';
 
@@ -15,9 +15,6 @@ export default function Recordings() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [summarizing, setSummarizing] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [expandedRecordings, setExpandedRecordings] = useState<Set<string>>(new Set());
-  const [activeSummaryTab, setActiveSummaryTab] = useState<{[key: string]: 'transcript' | 'executive' | 'keypoints' | 'detailed'}>({});
-  const [summaryData, setSummaryData] = useState<{[key: string]: any}>({});
 
   const limit = 10;
   const RAILWAY_BACKEND_URL = 'https://voicenote-ai-backend.up.railway.app';
@@ -140,16 +137,6 @@ export default function Recordings() {
       // Refresh recordings to get updated status and content
       await fetchRecordings(currentPage);
       
-      // Fetch the summary data
-      await fetchSummaryData(recording.recording_id);
-      
-      // Auto-expand the recording to show the summary
-      const newExpanded = new Set(expandedRecordings);
-      newExpanded.add(recording.recording_id);
-      setExpandedRecordings(newExpanded);
-      
-      // Set default tab to transcript
-      setActiveSummaryTab(prev => ({ ...prev, [recording.recording_id]: 'transcript' }));
       
       // Clear success message after 5 seconds
       setTimeout(() => setSuccessMessage(null), 5000);
@@ -205,7 +192,7 @@ export default function Recordings() {
         return `${baseClasses} bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300`;
       case 'processing':
         return `${baseClasses} bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300`;
-      case 'transcribed':
+      case 'summarized':
         return `${baseClasses} bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300`;
       case 'error':
         return `${baseClasses} bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300`;
@@ -220,8 +207,8 @@ export default function Recordings() {
         return 'Recorded';
       case 'processing':
         return 'Processing';
-      case 'transcribed':
-        return 'Transcribed';
+      case 'summarized':
+        return 'Summarized';
       case 'error':
         return 'Error';
       default:
@@ -229,66 +216,8 @@ export default function Recordings() {
     }
   };
 
-  const toggleRecordingExpansion = async (recordingId: string) => {
-    const newExpanded = new Set(expandedRecordings);
-    if (newExpanded.has(recordingId)) {
-      newExpanded.delete(recordingId);
-    } else {
-      newExpanded.add(recordingId);
-      // Set default tab to transcript if not already set
-      if (!activeSummaryTab[recordingId]) {
-        setActiveSummaryTab(prev => ({ ...prev, [recordingId]: 'transcript' }));
-      }
-      // Fetch summary data if we don't have it yet
-      if (!summaryData[recordingId]) {
-        await fetchSummaryData(recordingId);
-      }
-    }
-    setExpandedRecordings(newExpanded);
-  };
 
-  const setSummaryTab = (recordingId: string, tab: 'transcript' | 'executive' | 'keypoints' | 'detailed') => {
-    setActiveSummaryTab(prev => ({ ...prev, [recordingId]: tab }));
-  };
 
-  const fetchSummaryData = async (recordingId: string) => {
-    try {
-      const response = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${recordingId}/summary`);
-      if (response.ok) {
-        const data = await response.json();
-        setSummaryData(prev => ({ ...prev, [recordingId]: data.unified_summary }));
-        return data.unified_summary;
-      }
-    } catch (err) {
-      console.warn('Failed to fetch summary data:', err);
-    }
-    return null;
-  };
-
-  const hasSummaryContent = (recording: RecordingType) => {
-    // Check if we have summary data from storage or transcription in recordings table
-    const storedSummary = summaryData[recording.recording_id];
-    return recording.transcription || 
-           (storedSummary && storedSummary.consolidated_summary) ||
-           recording.status === 'summarized';
-  };
-
-  const getSummaryContent = (recording: RecordingType, type: 'transcript' | 'executive' | 'keypoints' | 'detailed') => {
-    const storedSummary = summaryData[recording.recording_id];
-    
-    switch (type) {
-      case 'transcript':
-        return recording.transcription;
-      case 'executive':
-        return storedSummary?.consolidated_summary?.executive_summary || recording.summary_short;
-      case 'keypoints':
-        return storedSummary?.consolidated_summary?.key_points || recording.summary_medium;
-      case 'detailed':
-        return storedSummary?.consolidated_summary?.detailed_summary || recording.summary_detailed;
-      default:
-        return null;
-    }
-  };
 
   if (loading && recordings.length === 0) {
     return (
@@ -356,13 +285,13 @@ export default function Recordings() {
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
                 <div className="divide-y divide-gray-200 dark:divide-gray-700">
                   {recordings.map((recording) => {
-                    const isExpanded = expandedRecordings.has(recording.recording_id);
-                    const currentTab = activeSummaryTab[recording.recording_id] || 'transcript';
-                    const hasContent = hasSummaryContent(recording);
                     
                     return (
                       <div key={recording.recording_id} className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
-                        <div className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        <div 
+                          className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                          onClick={() => navigate(`/recordings/${recording.recording_id}`)}
+                        >
                           <div className="flex items-center justify-between">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-3 mb-2">
@@ -387,14 +316,14 @@ export default function Recordings() {
                                 )}
                               </div>
 
-                              {recording.summary_short && !isExpanded && (
+                              {recording.summary_short && (
                                 <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 line-clamp-2">
                                   {recording.summary_short}
                                 </p>
                               )}
                             </div>
 
-                            <div className="flex items-center gap-2 ml-4">
+                            <div className="flex items-center gap-2 ml-4" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => navigate(`/recordings/${recording.recording_id}`)}
                                 className="inline-flex items-center gap-1 bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors dark:bg-blue-900 dark:hover:bg-blue-800 dark:text-blue-300"
@@ -403,26 +332,26 @@ export default function Recordings() {
                                 View
                               </button>
                               
-                              {hasContent && (
-                                <button
-                                  onClick={() => toggleRecordingExpansion(recording.recording_id)}
-                                  className="inline-flex items-center gap-1 bg-green-100 hover:bg-green-200 text-green-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors dark:bg-green-900 dark:hover:bg-green-800 dark:text-green-300"
-                                >
-                                  {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                  {isExpanded ? 'Hide' : 'Show'} Summary
-                                </button>
-                              )}
-                              
-                              {!hasContent && (
-                                <button
-                                  onClick={() => handleSummarize(recording)}
-                                  disabled={summarizing === recording.recording_id}
-                                  className="inline-flex items-center gap-1 bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:bg-purple-900 dark:hover:bg-purple-800 dark:text-purple-300"
-                                >
-                                  <Sparkles className="w-4 h-4" />
-                                  {summarizing === recording.recording_id ? 'Processing...' : 'Summarize'}
-                                </button>
-                              )}
+                              {/* Summarize Button - Always show but disabled if already summarized */}
+                              <button
+                                onClick={() => recording.status !== 'summarized' ? handleSummarize(recording) : null}
+                                disabled={summarizing === recording.recording_id || recording.status === 'summarized'}
+                                className={`inline-flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                  recording.status === 'summarized'
+                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
+                                    : summarizing === recording.recording_id
+                                    ? 'bg-purple-100 text-purple-700 opacity-50 cursor-not-allowed dark:bg-purple-900 dark:text-purple-300'
+                                    : 'bg-purple-100 hover:bg-purple-200 text-purple-700 dark:bg-purple-900 dark:hover:bg-purple-800 dark:text-purple-300'
+                                }`}
+                              >
+                                <Sparkles className="w-4 h-4" />
+                                {summarizing === recording.recording_id 
+                                  ? 'Processing...' 
+                                  : recording.status === 'summarized' 
+                                  ? 'Summarized' 
+                                  : 'Summarize'
+                                }
+                              </button>
                               
                               {recording.file_path && (
                                 <button
@@ -445,103 +374,6 @@ export default function Recordings() {
                             </div>
                           </div>
                         </div>
-
-                        {/* Expandable Summary Section */}
-                        {isExpanded && hasContent && (
-                          <div className="px-6 pb-6 bg-gray-50 dark:bg-gray-800">
-                            {/* Tab Navigation */}
-                            <div className="border-b border-gray-200 dark:border-gray-600 mb-4">
-                              <nav className="flex space-x-8">
-                                {[
-                                  { key: 'transcript', label: 'Transcript', available: !!getSummaryContent(recording, 'transcript') },
-                                  { key: 'executive', label: 'Executive Summary', available: !!getSummaryContent(recording, 'executive') },
-                                  { key: 'keypoints', label: 'Key Points', available: !!getSummaryContent(recording, 'keypoints') },
-                                  { key: 'detailed', label: 'Detailed Summary', available: !!getSummaryContent(recording, 'detailed') },
-                                ].map((tab) => (
-                                  <button
-                                    key={tab.key}
-                                    onClick={() => setSummaryTab(recording.recording_id, tab.key as any)}
-                                    disabled={!tab.available}
-                                    className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                                      currentTab === tab.key && tab.available
-                                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                                    }`}
-                                  >
-                                    {tab.label}
-                                  </button>
-                                ))}
-                              </nav>
-                            </div>
-
-                            {/* Tab Content */}
-                            <div className="bg-white dark:bg-gray-700 rounded-lg p-4">
-                              {currentTab === 'transcript' && getSummaryContent(recording, 'transcript') && (
-                                <div>
-                                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Transcription</h4>
-                                  <div className="prose prose-sm max-w-none">
-                                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                                      {getSummaryContent(recording, 'transcript')}
-                                    </p>
-                                  </div>
-                                </div>
-                              )}
-
-                              {currentTab === 'executive' && getSummaryContent(recording, 'executive') && (
-                                <div>
-                                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Executive Summary</h4>
-                                  <div className="prose prose-sm max-w-none">
-                                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                                      {getSummaryContent(recording, 'executive')}
-                                    </p>
-                                  </div>
-                                </div>
-                              )}
-
-                              {currentTab === 'keypoints' && getSummaryContent(recording, 'keypoints') && (
-                                <div>
-                                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Key Points</h4>
-                                  <div className="prose prose-sm max-w-none">
-                                    <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                                      {getSummaryContent(recording, 'keypoints')}
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-
-                              {currentTab === 'detailed' && getSummaryContent(recording, 'detailed') && (
-                                <div>
-                                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Detailed Summary</h4>
-                                  <div className="prose prose-sm max-w-none">
-                                    <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                                      {getSummaryContent(recording, 'detailed')}
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Show message if no content for current tab */}
-                              {((currentTab === 'transcript' && !getSummaryContent(recording, 'transcript')) ||
-                                (currentTab === 'executive' && !getSummaryContent(recording, 'executive')) ||
-                                (currentTab === 'keypoints' && !getSummaryContent(recording, 'keypoints')) ||
-                                (currentTab === 'detailed' && !getSummaryContent(recording, 'detailed'))) && (
-                                <div className="text-center py-8">
-                                  <p className="text-gray-500 dark:text-gray-400 mb-4">
-                                    This content is not available yet.
-                                  </p>
-                                  <button
-                                    onClick={() => handleSummarize(recording)}
-                                    disabled={summarizing === recording.recording_id}
-                                    className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                                  >
-                                    <Sparkles className="w-4 h-4" />
-                                    {summarizing === recording.recording_id ? 'Processing...' : 'Generate Summary'}
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
                       </div>
                     );
                   })}

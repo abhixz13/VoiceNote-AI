@@ -1,7 +1,7 @@
 import z from "zod";
 
 // Recording status types
-export const RecordingStatus = z.enum(['recorded', 'processing', 'transcribed', 'summarized', 'error']);
+export const RecordingStatus = z.enum(['recorded', 'processing', 'summarized', 'error']);
 export type RecordingStatusType = z.infer<typeof RecordingStatus>;
 
 // Job status types  
