@@ -116,24 +116,31 @@ export default function Recordings() {
     setSuccessMessage(null);
 
     try {
-      const response = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${recording.recording_id}/process`, {
+      const response = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${recording.recording_id}/summarize`, {
         method: 'POST',
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Failed to process recording' }));
-        throw new Error(errorData.detail || 'Failed to process recording');
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to generate summary' }));
+        throw new Error(errorData.detail || 'Failed to generate summary');
       }
 
-      setSuccessMessage('Processing started! Transcription and summarization in progress.');
+      const result = await response.json();
       
-      // Refresh recordings to get updated status
+      // Handle different response types
+      if (result.already_existed) {
+        setSuccessMessage('Summaries already exist for this recording. Click "View Summary" to see them.');
+      } else {
+        setSuccessMessage('Summary generation completed successfully! Click "View Summary" to see results.');
+      }
+      
+      // Refresh recordings to get updated status and show "View Summary" button
       await fetchRecordings(currentPage);
       
-      // Clear success message after 5 seconds
-      setTimeout(() => setSuccessMessage(null), 5000);
+      // Clear success message after 7 seconds (longer for better UX)
+      setTimeout(() => setSuccessMessage(null), 7000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to process recording');
+      setError(err instanceof Error ? err.message : 'Failed to generate summary');
     } finally {
       setSummarizing(null);
     }

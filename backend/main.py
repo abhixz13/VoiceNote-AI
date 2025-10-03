@@ -148,6 +148,7 @@ class SummaryResponse(BaseModel):
     unified_summary: Optional[Dict] = None
     message: Optional[str] = None
     error: Optional[str] = None
+    already_existed: Optional[bool] = None
     timestamp: str
 
 
@@ -249,6 +250,7 @@ async def summarize_recording(recording_id: str):
             recording_id=result['recording_id'],
             unified_summary=result.get('unified_summary'),
             message=result['message'],
+            already_existed=result.get('already_existed', False),
             timestamp=datetime.now().isoformat()
         )
         

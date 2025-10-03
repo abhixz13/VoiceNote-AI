@@ -270,7 +270,6 @@ class TranscriptionService:
     async def summarize_recording(self, recording_id: str) -> Dict[str, Any]:
         """
         Generate summary for an existing recording (triggered by user clicking "Summarize")
-        Handles both first-time summarization and regeneration
         
         Args:
             recording_id: ID of the recording to summarize
@@ -290,10 +289,23 @@ class TranscriptionService:
                     'recording_id': recording_id
                 }
             
-            # Check current status - if already summarized, this is a regeneration
+            # Check if summaries already exist to avoid token waste
             current_status = recording_info.get('status', 'recorded')
             if current_status == 'summarized':
-                self.logger.info(f"Recording {recording_id} already summarized, regenerating summaries...")
+                self.logger.info(f"Recording {recording_id} already has summaries, returning existing ones...")
+                
+                # Get existing summary from summaries table
+                existing_summary = await self._get_existing_summary(recording_id)
+                if existing_summary:
+                    return {
+                        'status': 'success',
+                        'message': 'Summaries already exist for this recording',
+                        'recording_id': recording_id,
+                        'unified_summary': existing_summary.get('unified_summary'),
+                        'summary_id': existing_summary.get('summary_id'),
+                        'summary_path': existing_summary.get('summary_path'),
+                        'already_existed': True
+                    }
             
             # Check if transcription exists
             transcription_response = self.supabase.table('transcription').select('*').eq('recording_id', recording_id).execute()
@@ -340,10 +352,9 @@ class TranscriptionService:
                     self.logger.info(f"Updated recording {recording_id} status to 'summarized'")
                 
                 # Return success status with unified summary
-                message = 'Summary regeneration completed successfully' if current_status == 'summarized' else 'Summary generation completed successfully'
                 return {
                     'status': 'success',
-                    'message': message,
+                    'message': 'Summary generation completed successfully',
                     'recording_id': recording_id,
                     'unified_summary': processing_result.get('unified_summary'),
                     'summary_id': processing_result.get('summary_id'),
@@ -357,3 +368,47 @@ class TranscriptionService:
                 'message': f'Error generating summary: {str(e)}',
                 'recording_id': recording_id
             }
+    
+    async def _get_existing_summary(self, recording_id: str) -> Dict[str, Any]:
+        """
+        Get existing unified summary for a recording from Supabase
+        
+        Args:
+            recording_id: ID of the recording
+            
+        Returns:
+            Dictionary with existing summary data or None if not found
+        """
+        try:
+            # Get summary metadata from summaries table
+            summaries_response = self.supabase.table('summaries').select('*').eq('recording_id', recording_id).order('created_at', desc=True).limit(1).execute()
+            
+            if not summaries_response.data:
+                self.logger.warning(f"No summary metadata found for recording {recording_id}")
+                return None
+            
+            summary_metadata = summaries_response.data[0]
+            summary_path = summary_metadata['summary_path']
+            
+            # Extract filename from path (e.g., "Summaries/uuid.json" -> "uuid.json")
+            filename = summary_path.replace('Summaries/', '')
+            
+            # Download unified summary JSON from Summaries bucket
+            try:
+                summary_content = self.supabase.storage.from_('Summaries').download(filename)
+                unified_summary = json.loads(summary_content.decode('utf-8'))
+                
+                return {
+                    'summary_metadata': summary_metadata,
+                    'unified_summary': unified_summary,
+                    'summary_id': summary_metadata['summary_id'],
+                    'summary_path': summary_path
+                }
+                
+            except Exception as storage_error:
+                self.logger.error(f"Error downloading summary file {filename}: {str(storage_error)}")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error getting existing summary for {recording_id}: {str(e)}")
+            return None

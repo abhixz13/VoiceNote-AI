@@ -87,6 +87,40 @@ export default function RecordingDetail() {
     }
   };
 
+  const handleSummarize = async () => {
+    if (!recording) return;
+
+    setTranscribing(true); // Reuse the same loading state
+    try {
+      const response = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${recording.recording_id}/summarize`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate summary');
+      }
+
+      const result = await response.json();
+      
+      // Refresh recording data to get updated status
+      await fetchRecording();
+      
+      // If summaries were generated or already existed, they should now be loaded
+      if (result.unified_summary) {
+        setUnifiedSummary({
+          unified_summary: result.unified_summary,
+          summary_id: result.summary_id,
+          summary_path: result.summary_path
+        });
+      }
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate summary');
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -250,19 +284,19 @@ export default function RecordingDetail() {
                       key: 'short', 
                       label: 'Short', 
                       description: 'Executive summary',
-                      available: !!(unifiedSummary?.unified_summary?.consolidated_summary?.executive_summary)
+                      available: !!recording.summary_short 
                     },
                     { 
                       key: 'medium', 
                       label: 'Medium', 
                       description: 'Balanced detail',
-                      available: !!(unifiedSummary?.unified_summary?.consolidated_summary?.key_points)
+                      available: !!recording.summary_medium 
                     },
                     { 
                       key: 'detailed', 
                       label: 'Detailed', 
                       description: 'Comprehensive analysis',
-                      available: !!(unifiedSummary?.unified_summary?.consolidated_summary?.detailed_summary)
+                      available: !!recording.summary_detailed 
                     },
                   ].map((tab) => (
                     <button
@@ -328,14 +362,14 @@ export default function RecordingDetail() {
                 {/* Short Summary Content */}
                 {activeTab === 'short' && (
                   <div>
-                    {unifiedSummary?.unified_summary?.consolidated_summary?.executive_summary ? (
+                    {recording.summary_short ? (
                       <div className="prose prose-gray dark:prose-invert max-w-none">
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                           Executive Summary
                         </h3>
                         <div className="p-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
                           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                            {unifiedSummary.unified_summary.consolidated_summary.executive_summary}
+                            {recording.summary_short}
                           </p>
                         </div>
                       </div>
@@ -348,7 +382,7 @@ export default function RecordingDetail() {
                           Short summary not available
                         </p>
                         <button
-                          onClick={handleTranscribe}
+                          onClick={handleSummarize}
                           disabled={transcribing}
                           className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                         >
@@ -363,18 +397,18 @@ export default function RecordingDetail() {
                 {/* Medium Summary Content */}
                 {activeTab === 'medium' && (
                   <div>
-                    {unifiedSummary?.unified_summary?.consolidated_summary?.key_points ? (
+                    {recording.summary_medium ? (
                       <div className="prose prose-gray dark:prose-invert max-w-none">
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                          Key Points
+                          Medium Summary
                         </h3>
                         <div className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                           Balanced detail
                         </div>
                         <div className="p-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                          <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                            {unifiedSummary.unified_summary.consolidated_summary.key_points}
-                          </div>
+                          <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                            {recording.summary_medium}
+                          </p>
                         </div>
                       </div>
                     ) : (
@@ -386,7 +420,7 @@ export default function RecordingDetail() {
                           Medium summary not available
                         </p>
                         <button
-                          onClick={handleTranscribe}
+                          onClick={handleSummarize}
                           disabled={transcribing}
                           className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                         >
@@ -401,7 +435,7 @@ export default function RecordingDetail() {
                 {/* Detailed Summary Content */}
                 {activeTab === 'detailed' && (
                   <div>
-                    {unifiedSummary?.unified_summary?.consolidated_summary?.detailed_summary ? (
+                    {recording.summary_detailed ? (
                       <div className="prose prose-gray dark:prose-invert max-w-none">
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                           Detailed Summary
@@ -411,7 +445,7 @@ export default function RecordingDetail() {
                         </div>
                         <div className="p-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
                           <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                            {unifiedSummary.unified_summary.consolidated_summary.detailed_summary}
+                            {recording.summary_detailed}
                           </div>
                         </div>
                       </div>
@@ -424,7 +458,7 @@ export default function RecordingDetail() {
                           Detailed summary not available
                         </p>
                         <button
-                          onClick={handleTranscribe}
+                          onClick={handleSummarize}
                           disabled={transcribing}
                           className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                         >
