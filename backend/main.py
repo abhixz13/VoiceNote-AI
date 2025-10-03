@@ -444,7 +444,7 @@ async def delete_recording(recording_id: str):
             storage_errors.append(f"Main audio file: {str(e)}")
         
         # Step 5: Finally delete the recording record
-        recording_result = supabase.table('recordings').delete().eq('id', recording_id).execute()
+        recording_result = supabase.table('recordings').delete().eq('recording_id', recording_id).execute()
         
         if not recording_result.data:
             raise HTTPException(status_code=500, detail="Failed to delete recording from database")

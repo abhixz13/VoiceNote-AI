@@ -17,6 +17,7 @@ export default function Recordings() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [expandedRecordings, setExpandedRecordings] = useState<Set<string>>(new Set());
   const [activeSummaryTab, setActiveSummaryTab] = useState<{[key: string]: 'transcript' | 'executive' | 'keypoints' | 'detailed'}>({});
+  const [summaryData, setSummaryData] = useState<{[key: string]: any}>({});
 
   const limit = 10;
   const RAILWAY_BACKEND_URL = 'https://voicenote-ai-backend.up.railway.app';
@@ -139,6 +140,9 @@ export default function Recordings() {
       // Refresh recordings to get updated status and content
       await fetchRecordings(currentPage);
       
+      // Fetch the summary data
+      await fetchSummaryData(recording.recording_id);
+      
       // Auto-expand the recording to show the summary
       const newExpanded = new Set(expandedRecordings);
       newExpanded.add(recording.recording_id);
@@ -225,7 +229,7 @@ export default function Recordings() {
     }
   };
 
-  const toggleRecordingExpansion = (recordingId: string) => {
+  const toggleRecordingExpansion = async (recordingId: string) => {
     const newExpanded = new Set(expandedRecordings);
     if (newExpanded.has(recordingId)) {
       newExpanded.delete(recordingId);
@@ -235,6 +239,10 @@ export default function Recordings() {
       if (!activeSummaryTab[recordingId]) {
         setActiveSummaryTab(prev => ({ ...prev, [recordingId]: 'transcript' }));
       }
+      // Fetch summary data if we don't have it yet
+      if (!summaryData[recordingId]) {
+        await fetchSummaryData(recordingId);
+      }
     }
     setExpandedRecordings(newExpanded);
   };
@@ -243,8 +251,43 @@ export default function Recordings() {
     setActiveSummaryTab(prev => ({ ...prev, [recordingId]: tab }));
   };
 
+  const fetchSummaryData = async (recordingId: string) => {
+    try {
+      const response = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${recordingId}/summary`);
+      if (response.ok) {
+        const data = await response.json();
+        setSummaryData(prev => ({ ...prev, [recordingId]: data.unified_summary }));
+        return data.unified_summary;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch summary data:', err);
+    }
+    return null;
+  };
+
   const hasSummaryContent = (recording: RecordingType) => {
-    return recording.transcription || recording.summary_short || recording.summary_medium || recording.summary_detailed;
+    // Check if we have summary data from storage or transcription in recordings table
+    const storedSummary = summaryData[recording.recording_id];
+    return recording.transcription || 
+           (storedSummary && storedSummary.consolidated_summary) ||
+           recording.status === 'summarized';
+  };
+
+  const getSummaryContent = (recording: RecordingType, type: 'transcript' | 'executive' | 'keypoints' | 'detailed') => {
+    const storedSummary = summaryData[recording.recording_id];
+    
+    switch (type) {
+      case 'transcript':
+        return recording.transcription;
+      case 'executive':
+        return storedSummary?.consolidated_summary?.executive_summary || recording.summary_short;
+      case 'keypoints':
+        return storedSummary?.consolidated_summary?.key_points || recording.summary_medium;
+      case 'detailed':
+        return storedSummary?.consolidated_summary?.detailed_summary || recording.summary_detailed;
+      default:
+        return null;
+    }
   };
 
   if (loading && recordings.length === 0) {
@@ -410,10 +453,10 @@ export default function Recordings() {
                             <div className="border-b border-gray-200 dark:border-gray-600 mb-4">
                               <nav className="flex space-x-8">
                                 {[
-                                  { key: 'transcript', label: 'Transcript', available: !!recording.transcription },
-                                  { key: 'executive', label: 'Executive Summary', available: !!recording.summary_short },
-                                  { key: 'keypoints', label: 'Key Points', available: !!recording.summary_medium },
-                                  { key: 'detailed', label: 'Detailed Summary', available: !!recording.summary_detailed },
+                                  { key: 'transcript', label: 'Transcript', available: !!getSummaryContent(recording, 'transcript') },
+                                  { key: 'executive', label: 'Executive Summary', available: !!getSummaryContent(recording, 'executive') },
+                                  { key: 'keypoints', label: 'Key Points', available: !!getSummaryContent(recording, 'keypoints') },
+                                  { key: 'detailed', label: 'Detailed Summary', available: !!getSummaryContent(recording, 'detailed') },
                                 ].map((tab) => (
                                   <button
                                     key={tab.key}
@@ -433,55 +476,55 @@ export default function Recordings() {
 
                             {/* Tab Content */}
                             <div className="bg-white dark:bg-gray-700 rounded-lg p-4">
-                              {currentTab === 'transcript' && recording.transcription && (
+                              {currentTab === 'transcript' && getSummaryContent(recording, 'transcript') && (
                                 <div>
                                   <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Transcription</h4>
                                   <div className="prose prose-sm max-w-none">
                                     <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                                      {recording.transcription}
+                                      {getSummaryContent(recording, 'transcript')}
                                     </p>
                                   </div>
                                 </div>
                               )}
 
-                              {currentTab === 'executive' && recording.summary_short && (
+                              {currentTab === 'executive' && getSummaryContent(recording, 'executive') && (
                                 <div>
                                   <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Executive Summary</h4>
                                   <div className="prose prose-sm max-w-none">
                                     <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                                      {recording.summary_short}
+                                      {getSummaryContent(recording, 'executive')}
                                     </p>
                                   </div>
                                 </div>
                               )}
 
-                              {currentTab === 'keypoints' && recording.summary_medium && (
+                              {currentTab === 'keypoints' && getSummaryContent(recording, 'keypoints') && (
                                 <div>
                                   <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Key Points</h4>
                                   <div className="prose prose-sm max-w-none">
                                     <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                                      {recording.summary_medium}
+                                      {getSummaryContent(recording, 'keypoints')}
                                     </div>
                                   </div>
                                 </div>
                               )}
 
-                              {currentTab === 'detailed' && recording.summary_detailed && (
+                              {currentTab === 'detailed' && getSummaryContent(recording, 'detailed') && (
                                 <div>
                                   <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Detailed Summary</h4>
                                   <div className="prose prose-sm max-w-none">
                                     <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                                      {recording.summary_detailed}
+                                      {getSummaryContent(recording, 'detailed')}
                                     </div>
                                   </div>
                                 </div>
                               )}
 
                               {/* Show message if no content for current tab */}
-                              {((currentTab === 'transcript' && !recording.transcription) ||
-                                (currentTab === 'executive' && !recording.summary_short) ||
-                                (currentTab === 'keypoints' && !recording.summary_medium) ||
-                                (currentTab === 'detailed' && !recording.summary_detailed)) && (
+                              {((currentTab === 'transcript' && !getSummaryContent(recording, 'transcript')) ||
+                                (currentTab === 'executive' && !getSummaryContent(recording, 'executive')) ||
+                                (currentTab === 'keypoints' && !getSummaryContent(recording, 'keypoints')) ||
+                                (currentTab === 'detailed' && !getSummaryContent(recording, 'detailed'))) && (
                                 <div className="text-center py-8">
                                   <p className="text-gray-500 dark:text-gray-400 mb-4">
                                     This content is not available yet.

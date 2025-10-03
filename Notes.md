@@ -96,3 +96,7 @@ An effective integration test for the transcription service typically includes:
 -   **Error Parsing**: Carefully examine error messages from external services or clients (like `TypeError: __init__() got an unexpected keyword argument 'proxy'` or SQL constraint violations) to understand the underlying compatibility or schema issues.
 -   **Dependency Versioning**: Be mindful of the versions of all integrated libraries. Incompatible versions can lead to subtle and hard-to-diagnose runtime errors (as seen with the Supabase client and its HTTP dependencies).
 -   **Database Schema Alignment**: Ensure your application's data insertion logic perfectly matches the database schema constraints (e.g., explicitly providing UUIDs if the column is not auto-generating).
+
+
+
+sankalp373@gmail.com

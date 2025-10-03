@@ -103,7 +103,7 @@ class TranscriptionService:
     async def _get_recording_info(self, recording_id: str) -> Optional[Dict]:
         """Get recording information from database"""
         try:
-            response = self.supabase.table('recordings').select('*').eq('id', recording_id).execute()
+            response = self.supabase.table('recordings').select('*').eq('recording_id', recording_id).execute()
             return response.data[0] if response.data else None
         except Exception as e:
             self.logger.error(f"Error getting recording info {recording_id}: {str(e)}")
@@ -219,7 +219,7 @@ class TranscriptionService:
                 'updated_at': datetime.now().isoformat()
             }
             
-            self.supabase.table('recordings').update(update_data).eq('id', recording_id).execute()
+            self.supabase.table('recordings').update(update_data).eq('recording_id', recording_id).execute()
             self.logger.info(f"Updated recording {recording_id} status to 'transcribed'")
             
             return inserted_transcription_id  # Return the generated transcription_id
@@ -240,7 +240,7 @@ class TranscriptionService:
             # if error_message:
             #     update_data['metadata'] = json.dumps({'error': error_message})
             
-            response = self.supabase.table('recordings').update(update_data).eq('id', recording_id).execute()
+            response = self.supabase.table('recordings').update(update_data).eq('recording_id', recording_id).execute()
             self.logger.info(f"Updated recording {recording_id} status to {status}")
             
         except Exception as e:
@@ -350,23 +350,6 @@ class TranscriptionService:
                 if processing_result and processing_result.get('status') == 'success':
                     await self._update_recording_status(recording_id, 'summarized')
                     self.logger.info(f"Updated recording {recording_id} status to 'summarized'")
-                    
-                    # Extract and populate individual summary fields from unified summary
-                    unified_summary = processing_result.get('unified_summary')
-                    if unified_summary and 'consolidated_summary' in unified_summary:
-                        consolidated = unified_summary['consolidated_summary']
-                        
-                        # Import ChunkStorageService to update individual summary fields
-                        from .chunk_storage_service import ChunkStorageService
-                        chunk_storage = ChunkStorageService()
-                        
-                        await chunk_storage.update_recording_summaries(
-                            recording_id,
-                            summary_short=consolidated.get('executive_summary'),
-                            summary_medium=consolidated.get('key_points'),
-                            summary_detailed=consolidated.get('detailed_summary')
-                        )
-                        self.logger.info(f"Updated individual summary fields for recording {recording_id}")
                 
                 # Return success status with unified summary
                 return {
