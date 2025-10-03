@@ -326,10 +326,21 @@ Please provide a consolidated summary in the following JSON format:
 {{
   "executive_summary": "A comprehensive 3-4 sentence overview of the entire recording's main purpose and key outcomes",
   "key_points": "5-8 bullet points covering the most important insights, decisions, and information from the entire recording",
-  "detailed_summary": "A comprehensive 300-500 word summary that captures all important aspects, themes, and details from the entire recording while maintaining logical flow"
+  "detailed_summary": [
+    {
+      "title": "string (short heading)",
+      "paragraphs": ["string", "string", ...]  // 1-4 paragraphs per section
+    },
 }}
 
-Focus on creating a cohesive narrative that represents the complete recording, not just a collection of chunk summaries."""
+    Requirements:
+    - key_points must be an array; each bullet 10-30 words.
+    - detailed_summary must be 3-6 sections with concise titles and 1-4 paragraphs each.
+    - Paragraphs should be 2-6 sentences, focusing on a single sub-topic.
+    - Preserve logical flow: Context → Findings/Insights → Recommendations → Next Steps/Risks.
+    - Return ONLY the JSON object.
+    - Focus on creating a cohesive narrative that represents the complete recording, not just a collection of chunk summaries.
+"""
 
             # Call reasoning model (using GPT-4 for better synthesis)
             response = self.client.chat.completions.create(
@@ -489,7 +500,7 @@ Focus on creating a cohesive narrative that represents the complete recording, n
                     self.logger.info(f"Updated summary table for {summary_id}")
             except Exception as db_error:
                 # Check if summary already exists
-                existing_response = self.supabase.table('summaries').select('summary_id').eq('summary_id', summary_id).execute()
+                existing_response = self.supabase.table('summary').select('summary_id').eq('summary_id', summary_id).execute()
                 if existing_response.data:
                     self.logger.info(f"Summary metadata already exists for {summary_id}")
                 else:
