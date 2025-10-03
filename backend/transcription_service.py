@@ -301,9 +301,9 @@ class TranscriptionService:
                         'status': 'success',
                         'message': 'Summaries already exist for this recording',
                         'recording_id': recording_id,
-                        'unified_summary': existing_summary.get('unified_summary'),
-                        'summary_id': existing_summary.get('summary_id'),
-                        'summary_path': existing_summary.get('summary_path'),
+                        'unified_summary': existing_summary.get('unified_summary') if existing_summary else None,
+                        'summary_id': existing_summary.get('summary_id') if existing_summary else None,
+                        'summary_path': existing_summary.get('summary_path') if existing_summary else None,
                         'already_existed': True
                     }
             
@@ -328,9 +328,9 @@ class TranscriptionService:
                     'status': 'success',
                     'message': 'Transcription and summary generation completed successfully',
                     'recording_id': recording_id,
-                    'unified_summary': transcription_result.get('unified_summary'),
-                    'summary_id': transcription_result.get('summary_id'),
-                    'summary_path': transcription_result.get('summary_path')
+                    'unified_summary': transcription_result.get('unified_summary') if transcription_result else None,
+                    'summary_id': transcription_result.get('summary_id') if transcription_result else None,
+                    'summary_path': transcription_result.get('summary_path') if transcription_result else None
                 }
             else:
                 # Transcription exists, get the latest one
