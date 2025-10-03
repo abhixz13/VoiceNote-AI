@@ -327,10 +327,11 @@ Please provide a consolidated summary in the following JSON format:
   "executive_summary": "A comprehensive 3-4 sentence overview of the entire recording's main purpose and key outcomes",
   "key_points": "5-8 bullet points covering the most important insights, decisions, and information from the entire recording",
   "detailed_summary": [
-    {
+    {{
       "title": "string (short heading)",
-      "paragraphs": ["string", "string", ...]  // 1-4 paragraphs per section
-    },
+      "paragraphs": ["string", "string", ...]
+    }}
+  ]
 }}
 
     Requirements:
