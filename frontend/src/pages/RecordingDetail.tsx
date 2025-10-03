@@ -117,6 +117,46 @@ export default function RecordingDetail() {
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
   };
 
+  const renderKeyPoints = (keyPoints: string | string[]) => {
+    if (Array.isArray(keyPoints)) {
+      return (
+        <ul className="space-y-2">
+          {keyPoints.map((point, index) => (
+            <li key={index} className="flex items-start gap-2">
+              <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></span>
+              <span className="text-gray-700 dark:text-gray-300">{point}</span>
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    return <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">{keyPoints}</div>;
+  };
+
+  const renderDetailedSummary = (detailedSummary: string | Array<{title: string, paragraphs: string[]}>) => {
+    if (Array.isArray(detailedSummary)) {
+      return (
+        <div className="space-y-6">
+          {detailedSummary.map((section, index) => (
+            <div key={index} className="border-l-4 border-blue-500 pl-4">
+              <h4 className="text-md font-semibold text-gray-900 dark:text-white mb-3">
+                {section.title}
+              </h4>
+              <div className="space-y-3">
+                {section.paragraphs.map((paragraph, pIndex) => (
+                  <p key={pIndex} className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    return <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">{detailedSummary}</div>;
+  };
+
   const getStatusBadge = (status: string) => {
     const baseClasses = "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium";
     
@@ -341,9 +381,7 @@ export default function RecordingDetail() {
                           Balanced detail
                         </div>
                         <div className="p-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                          <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                            {recording.summary_medium || unifiedSummary?.unified_summary?.consolidated_summary?.key_points}
-                          </div>
+                          {renderKeyPoints(recording.summary_medium || unifiedSummary?.unified_summary?.consolidated_summary?.key_points)}
                         </div>
                       </div>
                     ) : (
@@ -379,9 +417,7 @@ export default function RecordingDetail() {
                           Comprehensive analysis
                         </div>
                         <div className="p-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                          <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                            {recording.summary_detailed || unifiedSummary?.unified_summary?.consolidated_summary?.detailed_summary}
-                          </div>
+                          {renderDetailedSummary(recording.summary_detailed || unifiedSummary?.unified_summary?.consolidated_summary?.detailed_summary)}
                         </div>
                       </div>
                     ) : (
