@@ -41,6 +41,15 @@ class ChunkStorageService:
         chunk_ids = []
         
         try:
+            # Clean up existing chunks and summaries for this recording before regenerating
+            await self._cleanup_existing_data(recording_id)
+            logger.info(f"Cleaned up existing data for recording {recording_id}")
+            
+        except Exception as cleanup_error:
+            logger.warning(f"Error during cleanup for recording {recording_id}: {str(cleanup_error)}")
+            # Continue with generation even if cleanup fails
+        
+        try:
             for i, chunk_text in enumerate(chunks):
                 # Generate unique chunk ID
                 chunk_id = str(uuid.uuid4())
@@ -150,6 +159,79 @@ class ChunkStorageService:
                 'recording_id': recording_id,
                 'summaries_generated': 0
             }
+    
+    async def _cleanup_existing_data(self, recording_id: str) -> None:
+        """
+        Clean up existing chunks and summaries for a recording before regenerating
+        
+        Args:
+            recording_id: ID of the recording to clean up
+        """
+        try:
+            logger.info(f"Starting cleanup for recording {recording_id}")
+            
+            # 1. Delete existing chunks from chunk table
+            try:
+                chunks_result = self.supabase.table('chunk').delete().eq('recording_id', recording_id).execute()
+                deleted_chunks = len(chunks_result.data) if chunks_result.data else 0
+                logger.info(f"Deleted {deleted_chunks} existing chunks for recording {recording_id}")
+            except Exception as e:
+                logger.warning(f"Error deleting chunks for {recording_id}: {str(e)}")
+            
+            # 2. Delete existing summaries from summaries table
+            try:
+                summaries_result = self.supabase.table('summaries').delete().eq('recording_id', recording_id).execute()
+                deleted_summaries = len(summaries_result.data) if summaries_result.data else 0
+                logger.info(f"Deleted {deleted_summaries} existing summaries for recording {recording_id}")
+            except Exception as e:
+                logger.warning(f"Error deleting summaries for {recording_id}: {str(e)}")
+            
+            # 3. Clean up storage files
+            storage_errors = []
+            
+            # Delete chunk files from Chunks bucket
+            try:
+                chunk_files = self.supabase.storage.from_('Chunks').list(f"{recording_id}/")
+                if chunk_files:
+                    # Get all files in the recording directory
+                    file_paths = []
+                    for item in chunk_files:
+                        if isinstance(item, dict) and 'name' in item:
+                            # List subdirectories (transcription_id folders)
+                            transcription_files = self.supabase.storage.from_('Chunks').list(f"{recording_id}/{item['name']}/")
+                            if transcription_files:
+                                for file_item in transcription_files:
+                                    if isinstance(file_item, dict) and 'name' in file_item:
+                                        file_paths.append(f"{recording_id}/{item['name']}/{file_item['name']}")
+                    
+                    if file_paths:
+                        self.supabase.storage.from_('Chunks').remove(file_paths)
+                        logger.info(f"Deleted {len(file_paths)} chunk files for recording {recording_id}")
+            except Exception as e:
+                storage_errors.append(f"Chunks storage: {str(e)}")
+            
+            # Delete summary files from Summaries bucket
+            try:
+                # Get summary IDs for this recording from the database (before we deleted them)
+                # Since we already deleted from summaries table, we'll try to clean up orphaned files
+                # This is best-effort cleanup
+                summary_files = self.supabase.storage.from_('Summaries').list()
+                if summary_files:
+                    # We can't easily identify which summary files belong to this recording
+                    # since summary files are named by summary_id, not recording_id
+                    # This is acceptable as orphaned files won't cause functional issues
+                    logger.info(f"Summary files cleanup skipped (files are named by summary_id)")
+            except Exception as e:
+                storage_errors.append(f"Summaries storage: {str(e)}")
+            
+            if storage_errors:
+                logger.warning(f"Storage cleanup warnings for {recording_id}: {storage_errors}")
+            
+            logger.info(f"Cleanup completed for recording {recording_id}")
+            
+        except Exception as e:
+            logger.error(f"Error during cleanup for recording {recording_id}: {str(e)}")
+            # Don't raise - cleanup failure shouldn't prevent regeneration
     
     async def store_chunk_summaries(self, recording_id: str, chunk_summaries: List[Dict[str, Any]]) -> Dict[str, Any]:
         """

@@ -270,6 +270,7 @@ class TranscriptionService:
     async def summarize_recording(self, recording_id: str) -> Dict[str, Any]:
         """
         Generate summary for an existing recording (triggered by user clicking "Summarize")
+        Handles both first-time summarization and regeneration
         
         Args:
             recording_id: ID of the recording to summarize
@@ -288,6 +289,11 @@ class TranscriptionService:
                     'message': f'Recording {recording_id} not found',
                     'recording_id': recording_id
                 }
+            
+            # Check current status - if already summarized, this is a regeneration
+            current_status = recording_info.get('status', 'recorded')
+            if current_status == 'summarized':
+                self.logger.info(f"Recording {recording_id} already summarized, regenerating summaries...")
             
             # Check if transcription exists
             transcription_response = self.supabase.table('transcription').select('*').eq('recording_id', recording_id).execute()
@@ -334,9 +340,10 @@ class TranscriptionService:
                     self.logger.info(f"Updated recording {recording_id} status to 'summarized'")
                 
                 # Return success status with unified summary
+                message = 'Summary regeneration completed successfully' if current_status == 'summarized' else 'Summary generation completed successfully'
                 return {
                     'status': 'success',
-                    'message': 'Summary generation completed successfully',
+                    'message': message,
                     'recording_id': recording_id,
                     'unified_summary': processing_result.get('unified_summary'),
                     'summary_id': processing_result.get('summary_id'),
