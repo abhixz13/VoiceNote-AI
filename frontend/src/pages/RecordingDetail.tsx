@@ -9,7 +9,7 @@ export default function RecordingDetail() {
   const [recording, setRecording] = useState<RecordingType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'short' | 'medium' | 'detailed'>('short');
+  const [activeTab, setActiveTab] = useState<'transcript' | 'short' | 'medium' | 'detailed'>('transcript');
   const [transcribing, setTranscribing] = useState(false);
 
   // Define your Railway backend URL
@@ -212,79 +212,206 @@ export default function RecordingDetail() {
             )}
           </div>
 
-          {/* Transcription */}
-          {recording.transcription && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Transcription
-              </h2>
-              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                  {recording.transcription}
-                </p>
+          {/* Tabbed Content: Transcription & Summaries */}
+          {(recording.transcription || recording.summary_short || recording.summary_medium || recording.summary_detailed) && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+              {/* Tab Navigation */}
+              <div className="border-b border-gray-200 dark:border-gray-700">
+                <nav className="flex">
+                  {[
+                    { 
+                      key: 'transcript', 
+                      label: 'Transcript', 
+                      description: 'Full text transcription',
+                      available: !!recording.transcription 
+                    },
+                    { 
+                      key: 'short', 
+                      label: 'Short', 
+                      description: 'Executive summary',
+                      available: !!recording.summary_short 
+                    },
+                    { 
+                      key: 'medium', 
+                      label: 'Medium', 
+                      description: 'Balanced detail',
+                      available: !!recording.summary_medium 
+                    },
+                    { 
+                      key: 'detailed', 
+                      label: 'Detailed', 
+                      description: 'Comprehensive analysis',
+                      available: !!recording.summary_detailed 
+                    },
+                  ].map((tab) => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setActiveTab(tab.key as typeof activeTab)}
+                      disabled={!tab.available}
+                      className={`flex-1 px-6 py-4 text-left border-b-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                        activeTab === tab.key
+                          ? 'border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-400'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                      }`}
+                    >
+                      <div className="font-medium text-sm">
+                        {tab.label}
+                      </div>
+                      {tab.available && (
+                        <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                          {tab.description}
+                        </div>
+                      )}
+                      {!tab.available && (
+                        <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                          Not available
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </nav>
               </div>
-            </div>
-          )}
 
-          {/* Summaries */}
-          {(recording.summary_short || recording.summary_medium || recording.summary_detailed) && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                AI Summaries
-              </h2>
-
-              {/* Tabs */}
-              <div className="flex gap-1 mb-6 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
-                {[
-                  { key: 'short', label: 'Short', available: !!recording.summary_short },
-                  { key: 'medium', label: 'Medium', available: !!recording.summary_medium },
-                  { key: 'detailed', label: 'Detailed', available: !!recording.summary_detailed },
-                ].map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveTab(tab.key as typeof activeTab)}
-                    disabled={!tab.available}
-                    className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                      activeTab === tab.key
-                        ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-600 dark:text-white'
-                        : 'text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Summary Content */}
-              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg min-h-[120px]">
-                {activeTab === 'short' && recording.summary_short && (
-                  <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                    {recording.summary_short}
-                  </p>
-                )}
-                {activeTab === 'medium' && recording.summary_medium && (
-                  <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                    {recording.summary_medium}
-                  </p>
-                )}
-                {activeTab === 'detailed' && recording.summary_detailed && (
-                  <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                    {recording.summary_detailed}
+              {/* Tab Content */}
+              <div className="p-8">
+                {/* Transcript Content */}
+                {activeTab === 'transcript' && (
+                  <div>
+                    {recording.transcription ? (
+                      <div className="prose prose-gray dark:prose-invert max-w-none">
+                        <div className="p-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                          <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                            {recording.transcription}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <FileAudio className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-500 dark:text-gray-400 mb-4">
+                          Transcription not available
+                        </p>
+                        <button
+                          onClick={handleTranscribe}
+                          disabled={transcribing}
+                          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          <RefreshCw className={`w-4 h-4 ${transcribing ? 'animate-spin' : ''}`} />
+                          {transcribing ? 'Generating...' : 'Generate Transcript'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
-                {!recording[`summary_${activeTab}` as keyof RecordingType] && (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 dark:text-gray-400">
-                      {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} summary not available
-                    </p>
-                    <button
-                      onClick={handleTranscribe}
-                      disabled={transcribing}
-                      className="mt-2 inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 text-sm"
-                    >
-                      <RefreshCw className={`w-4 h-4 ${transcribing ? 'animate-spin' : ''}`} />
-                      Generate Summary
-                    </button>
+
+                {/* Short Summary Content */}
+                {activeTab === 'short' && (
+                  <div>
+                    {recording.summary_short ? (
+                      <div className="prose prose-gray dark:prose-invert max-w-none">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                          Executive Summary
+                        </h3>
+                        <div className="p-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                          <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                            {recording.summary_short}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center mx-auto mb-4">
+                          <RefreshCw className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                        </div>
+                        <p className="text-gray-500 dark:text-gray-400 mb-4">
+                          Short summary not available
+                        </p>
+                        <button
+                          onClick={handleTranscribe}
+                          disabled={transcribing}
+                          className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          <RefreshCw className={`w-4 h-4 ${transcribing ? 'animate-spin' : ''}`} />
+                          {transcribing ? 'Generating...' : 'Generate Summary'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Medium Summary Content */}
+                {activeTab === 'medium' && (
+                  <div>
+                    {recording.summary_medium ? (
+                      <div className="prose prose-gray dark:prose-invert max-w-none">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                          Medium Summary
+                        </h3>
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                          Balanced detail
+                        </div>
+                        <div className="p-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                          <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                            {recording.summary_medium}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center mx-auto mb-4">
+                          <RefreshCw className="w-6 h-6 text-green-600 dark:text-green-400" />
+                        </div>
+                        <p className="text-gray-500 dark:text-gray-400 mb-4">
+                          Medium summary not available
+                        </p>
+                        <button
+                          onClick={handleTranscribe}
+                          disabled={transcribing}
+                          className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          <RefreshCw className={`w-4 h-4 ${transcribing ? 'animate-spin' : ''}`} />
+                          {transcribing ? 'Generating...' : 'Generate Summary'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Detailed Summary Content */}
+                {activeTab === 'detailed' && (
+                  <div>
+                    {recording.summary_detailed ? (
+                      <div className="prose prose-gray dark:prose-invert max-w-none">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                          Detailed Summary
+                        </h3>
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                          Comprehensive analysis
+                        </div>
+                        <div className="p-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                          <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                            {recording.summary_detailed}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900 rounded-lg flex items-center justify-center mx-auto mb-4">
+                          <RefreshCw className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+                        </div>
+                        <p className="text-gray-500 dark:text-gray-400 mb-4">
+                          Detailed summary not available
+                        </p>
+                        <button
+                          onClick={handleTranscribe}
+                          disabled={transcribing}
+                          className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          <RefreshCw className={`w-4 h-4 ${transcribing ? 'animate-spin' : ''}`} />
+                          {transcribing ? 'Generating...' : 'Generate Summary'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
