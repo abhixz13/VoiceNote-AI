@@ -6,6 +6,7 @@ FastAPI application for audio transcription and summarization
 
 import os
 import sys
+import json
 import logging
 from typing import Dict, Optional
 from datetime import datetime
@@ -290,6 +291,60 @@ async def process_recording(recording_id: str, background_tasks: BackgroundTasks
     except Exception as e:
         logger.error(f"Error in process endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Get unified summary endpoint
+@app.get("/api/recordings/{recording_id}/summary")
+async def get_unified_summary(recording_id: str):
+    """
+    Get unified summary for a recording
+    
+    Args:
+        recording_id: ID of the recording
+        
+    Returns:
+        Unified summary JSON or 404 if not found
+    """
+    try:
+        logger.info(f"Fetching unified summary for recording {recording_id}")
+        
+        service = get_transcription_service()
+        supabase = service.supabase
+        
+        # Get summary metadata from summaries table
+        summaries_response = supabase.table('summaries').select('*').eq('recording_id', recording_id).order('created_at', desc=True).limit(1).execute()
+        
+        if not summaries_response.data:
+            raise HTTPException(status_code=404, detail="No summary found for this recording")
+        
+        summary_metadata = summaries_response.data[0]
+        summary_path = summary_metadata['summary_path']
+        
+        # Extract filename from path (e.g., "Summaries/uuid.json" -> "uuid.json")
+        filename = summary_path.replace('Summaries/', '')
+        
+        # Download unified summary JSON from Summaries bucket
+        try:
+            summary_content = supabase.storage.from_('Summaries').download(filename)
+            unified_summary = json.loads(summary_content.decode('utf-8'))
+            
+            return {
+                "status": "success",
+                "recording_id": recording_id,
+                "summary_metadata": summary_metadata,
+                "unified_summary": unified_summary,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as storage_error:
+            logger.error(f"Error downloading summary file {filename}: {str(storage_error)}")
+            raise HTTPException(status_code=500, detail=f"Failed to retrieve summary file: {str(storage_error)}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching unified summary for {recording_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch summary: {str(e)}")
 
 
 # Delete recording endpoint with cascading deletes

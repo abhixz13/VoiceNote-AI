@@ -11,6 +11,7 @@ export default function RecordingDetail() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'transcript' | 'short' | 'medium' | 'detailed'>('transcript');
   const [transcribing, setTranscribing] = useState(false);
+  const [unifiedSummary, setUnifiedSummary] = useState<any>(null);
 
   // Define your Railway backend URL
   const RAILWAY_BACKEND_URL = 'https://voicenote-ai-backend.up.railway.app';
@@ -33,10 +34,30 @@ export default function RecordingDetail() {
 
       const data: RecordingType = await response.json();
       setRecording(data);
+
+      // If recording is summarized, fetch the unified summary
+      if (data.status === 'summarized') {
+        await fetchUnifiedSummary(data.recording_id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch recording');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchUnifiedSummary = async (recordingId: string) => {
+    try {
+      // Check if there's a summary in the summaries table for this recording
+      const summariesResponse = await fetch(`${RAILWAY_BACKEND_URL}/api/recordings/${recordingId}/summary`);
+      
+      if (summariesResponse.ok) {
+        const summaryData = await summariesResponse.json();
+        setUnifiedSummary(summaryData);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch unified summary:', err);
+      // Don't set error state, just log the warning
     }
   };
 
@@ -213,7 +234,7 @@ export default function RecordingDetail() {
           </div>
 
           {/* Tabbed Content: Transcription & Summaries */}
-          {(recording.transcription || recording.summary_short || recording.summary_medium || recording.summary_detailed) && (
+          {(recording.transcription || unifiedSummary) && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
               {/* Tab Navigation */}
               <div className="border-b border-gray-200 dark:border-gray-700">
@@ -229,19 +250,19 @@ export default function RecordingDetail() {
                       key: 'short', 
                       label: 'Short', 
                       description: 'Executive summary',
-                      available: !!recording.summary_short 
+                      available: !!(unifiedSummary?.unified_summary?.consolidated_summary?.executive_summary)
                     },
                     { 
                       key: 'medium', 
                       label: 'Medium', 
                       description: 'Balanced detail',
-                      available: !!recording.summary_medium 
+                      available: !!(unifiedSummary?.unified_summary?.consolidated_summary?.key_points)
                     },
                     { 
                       key: 'detailed', 
                       label: 'Detailed', 
                       description: 'Comprehensive analysis',
-                      available: !!recording.summary_detailed 
+                      available: !!(unifiedSummary?.unified_summary?.consolidated_summary?.detailed_summary)
                     },
                   ].map((tab) => (
                     <button
@@ -307,14 +328,14 @@ export default function RecordingDetail() {
                 {/* Short Summary Content */}
                 {activeTab === 'short' && (
                   <div>
-                    {recording.summary_short ? (
+                    {unifiedSummary?.unified_summary?.consolidated_summary?.executive_summary ? (
                       <div className="prose prose-gray dark:prose-invert max-w-none">
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                           Executive Summary
                         </h3>
                         <div className="p-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
                           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                            {recording.summary_short}
+                            {unifiedSummary.unified_summary.consolidated_summary.executive_summary}
                           </p>
                         </div>
                       </div>
@@ -342,18 +363,18 @@ export default function RecordingDetail() {
                 {/* Medium Summary Content */}
                 {activeTab === 'medium' && (
                   <div>
-                    {recording.summary_medium ? (
+                    {unifiedSummary?.unified_summary?.consolidated_summary?.key_points ? (
                       <div className="prose prose-gray dark:prose-invert max-w-none">
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                          Medium Summary
+                          Key Points
                         </h3>
                         <div className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                           Balanced detail
                         </div>
                         <div className="p-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                          <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                            {recording.summary_medium}
-                          </p>
+                          <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                            {unifiedSummary.unified_summary.consolidated_summary.key_points}
+                          </div>
                         </div>
                       </div>
                     ) : (
@@ -380,7 +401,7 @@ export default function RecordingDetail() {
                 {/* Detailed Summary Content */}
                 {activeTab === 'detailed' && (
                   <div>
-                    {recording.summary_detailed ? (
+                    {unifiedSummary?.unified_summary?.consolidated_summary?.detailed_summary ? (
                       <div className="prose prose-gray dark:prose-invert max-w-none">
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                           Detailed Summary
@@ -390,7 +411,7 @@ export default function RecordingDetail() {
                         </div>
                         <div className="p-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
                           <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                            {recording.summary_detailed}
+                            {unifiedSummary.unified_summary.consolidated_summary.detailed_summary}
                           </div>
                         </div>
                       </div>
