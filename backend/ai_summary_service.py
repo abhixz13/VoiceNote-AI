@@ -324,8 +324,8 @@ TASK: Analyze all the chunk summaries above and create ONE consolidated summary 
 
 Please provide a consolidated summary in the following JSON format:
 {{
-  "executive_summary": "A comprehensive 3-4 sentence overview of the entire recording's main purpose and key outcomes",
-  "key_points": "5-8 bullet points covering the most important insights, decisions, and information from the entire recording",
+  "executive_summary": "Preferably, a comprehensive 3-4 sentence overview of the entire recording's main purpose and key outcomes",
+  "key_points": "Preferably, 5-8 bullet points covering the most important insights, decisions, and information from the entire recording",
   "detailed_summary": [
     {{
       "title": "string (short heading)",
@@ -335,12 +335,10 @@ Please provide a consolidated summary in the following JSON format:
 }}
 
     Requirements:
-    - key_points must be an array; each bullet 10-30 words.
-    - detailed_summary must be 3-6 sections with concise titles and 1-4 paragraphs each.
-    - Paragraphs should be 2-6 sentences, focusing on a single sub-topic.
     - Preserve logical flow: Context → Findings/Insights → Recommendations → Next Steps/Risks.
     - Return ONLY the JSON object.
     - Focus on creating a cohesive narrative that represents the complete recording, not just a collection of chunk summaries.
+    
 """
 
             # Call reasoning model (using GPT-4 for better synthesis)
